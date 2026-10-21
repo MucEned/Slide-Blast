@@ -86,39 +86,57 @@
   .timebar i { display: block; height: 100%; width: 100%; background: var(--accent); border-radius: inherit; }
   .timebar i.low { background: var(--danger); }
 
-  .targets {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: center;
-    min-height: 54px;
-  }
+  .tray { display: flex; align-items: center; justify-content: center; gap: 14px; }
+  .targets { display: flex; gap: 10px; align-items: center; }
   .target {
     position: relative;
     display: grid;
     place-items: center;
-    width: 52px;
-    height: 52px;
+    width: 64px;
+    height: 64px;
+    padding: 0;
     background: var(--panel);
     border: 1px solid var(--line);
-    border-radius: 12px;
-    transition: opacity .25s, transform .25s, border-color .25s;
-  }
-  .target.done { opacity: 0.35; transform: scale(0.88); border-color: var(--good); }
-  .target.done::after {
-    content: "";
-    position: absolute;
-    right: -5px;
-    top: -5px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--good) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%231f1828' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+    border-radius: 14px;
+    overflow: hidden;
   }
   .target.pop { animation: targetPop .45s ease; }
-  @keyframes targetPop { 40% { transform: scale(1.25); border-color: var(--good); } }
-  .shape { display: grid; gap: 2px; }
+  .target.swap { animation: targetSwap .35s ease; }
+  .target.denied { animation: targetDenied .3s ease; }
+  @keyframes targetPop { 0% { transform: scale(0.6); background: var(--good); } 100% { transform: none; } }
+  @keyframes targetSwap { 0% { transform: rotateY(90deg); } 100% { transform: none; } }
+  @keyframes targetDenied { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+  .swap-btn {
+    position: relative;
+    overflow: hidden;
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    display: grid;
+    place-content: center;
+    gap: 2px;
+    text-align: center;
+  }
+  /* cooldown: a dark wedge that unwinds as --cd goes from 1 to 0 */
+  .swap-btn::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: conic-gradient(rgba(20, 14, 28, 0.7) calc(var(--cd, 0) * 360deg), transparent 0);
+  }
+  .swap-btn > * { position: relative; }
+  .swap-btn svg { width: 20px; height: 20px; margin: 0 auto; display: block; }
+  .swap-btn .count { font: 500 0.85rem/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .swap-btn.ready { border-color: var(--accent); color: var(--accent); }
+  .swap-btn.ready:hover { background: var(--stone-2); }
+  .swap-btn.cooling { color: var(--muted); cursor: default; }
+  .swap-btn.denied { animation: targetDenied .3s ease; }
+  .combo .value.hot { color: var(--good); }
+  .combobar { height: 4px; border-radius: 99px; background: var(--stone); overflow: hidden; }
+  .combobar i { display: block; height: 100%; width: 0; background: var(--good); }
+  .shape { display: grid; gap: 2px; position: relative; z-index: 1; }
   .shape b { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
   .shape b.off { background: transparent; }
 
@@ -206,11 +224,11 @@
     .hud { gap: 6px 10px; padding: 10px 12px; }
     .value { font-size: 1.1rem; }
     .time .value { font-size: 1.35rem; }
-    .target { width: 44px; height: 44px; }
-    .shape b { width: 7px; height: 7px; }
+    .target { width: 58px; height: 58px; }
+    .tray { gap: 10px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .target, .target.pop { transition: none; animation: none; }
+    .target, .target.pop, .target.swap, .target.denied { transition: none; animation: none; }
   }
 </style>
 
@@ -225,12 +243,13 @@
 
   <section class="hud" aria-live="polite">
     <div class="stat">
-      <span class="label">Level</span>
-      <span class="value" id="levelVal">1</span>
-    </div>
-    <div class="stat">
       <span class="label">Score</span>
       <span class="value" id="scoreVal">0</span>
+    </div>
+    <div class="stat combo">
+      <span class="label">Combo</span>
+      <span class="value" id="comboVal">×1</span>
+      <div class="combobar"><i id="comboFill"></i></div>
     </div>
     <div class="stat time">
       <span class="label">Time</span>
@@ -239,7 +258,13 @@
     <div class="timebar"><i id="timeFill"></i></div>
   </section>
 
-  <div class="targets" id="targets" aria-label="Shapes to build this level"></div>
+  <div class="tray">
+    <div class="targets" id="targets" aria-label="Shapes to build"></div>
+    <button class="swap-btn ready" id="swapBtn" type="button" aria-label="Swap all three shapes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>
+      <span class="count" id="swapVal">Swap</span>
+    </button>
+  </div>
 
   <div class="board-wrap" id="wrap">
     <canvas id="board" aria-label="Game board: drag a row or column to slide it, tap a same-color group that forms a target shape to blast it"></canvas>
@@ -262,9 +287,11 @@
     </div>
     <ul>
       <li><b>Drag</b> a row sideways or a column up and down. Gems pushed off one edge come back on the other side. Slides are unlimited.</li>
-      <li>Arrange gems of one color into one of the <b>target shapes</b> shown above the board, then <b>tap</b> the group to blast it. Rotated and mirrored shapes count.</li>
+      <li>Arrange gems of one color into one of the <b>3 target shapes</b> above the board, then <b>tap</b> the group to blast it. Rotated and mirrored shapes count.</li>
       <li>The group must match the shape exactly. If an extra gem of the same color touches it, it won't blast, so slide that gem away first.</li>
-      <li>Build every target within <b>30 seconds</b>. The clock starts on your first move, and each second left over pays 20 points.</li>
+      <li>The game is endless. You start with <b>30 seconds</b>, and every finished shape adds <b>+3 s</b> and brings a new shape. The game ends when the clock hits zero.</li>
+      <li>Don't like the shapes? Press <b>Swap</b> next to them to get 3 new ones. The button recharges for 10 seconds and counts down on its face.</li>
+      <li><b>Combo:</b> finish the next shape within 3 seconds of the board settling and the combo grows. Each shape scores 100 per gem × your combo.</li>
     </ul>
     <div class="legend" id="legend" aria-label="All shapes"></div>
   </section>
@@ -273,7 +300,11 @@
 <script>
 (() => {
   const N = 8;
-  const LEVEL_TIME = 30;
+  const START_TIME = 30;
+  const TIME_PER_SHAPE = 3;
+  const SLOTS = 3;
+  const SWAP_COOLDOWN = 10000;
+  const COMBO_WINDOW = 3000;
   const TAU = Math.PI * 2;
   const GEMS = [
     { base: "#ff4f6a", light: "#ffc2cb", dark: "#9c1431" }, // ruby: circle
@@ -328,9 +359,11 @@
 
   let size = 400, cs = 50, dpr = 1;
   let grid = [];
-  let level = 1, score = 0, levelStart = 0, colors = 5;
+  let score = 0, colors = 5, completed = 0;
   let targets = [];
-  let timeLeft = LEVEL_TIME, timerOn = false;
+  let timeLeft = START_TIME, timerOn = false;
+  let combo = 0, comboUntil = 0, bestCombo = 0;
+  let swapReadyAt = 0;
   let best = 0;
   let phase = "idle"; // idle | blast | fall | over
   let drag = { active: false };
@@ -391,7 +424,7 @@
   function matchTarget(group) {
     if (group.length > MAX_PATTERN || group.length < 3) return -1;
     const key = canon(group.map((g) => [g.r, g.c]));
-    return targets.findIndex((t) => !t.done && PATTERNS[t.id].key === key);
+    return targets.findIndex((t) => PATTERNS[t.id].key === key);
   }
 
   function findMatch() {
@@ -414,37 +447,39 @@
     }
   }
 
-  const colorsFor = (lv) => Math.min(GEMS.length, 5 + Math.floor((lv - 1) / 2));
-  const poolFor = (lv) =>
-    lv === 1 ? ["I3", "O", "L", "T"] : lv === 2 ? ["I3", "O", "L", "T", "I", "Z"] : ["O", "L", "T", "I", "Z", "X", "U", "V"];
-  const targetCountFor = (lv) => Math.min(8, 2 + lv);
+  // difficulty grows with shapes finished: more colors and bigger shapes join over time
+  const colorsFor = (n) => (n < 10 ? 5 : n < 25 ? 6 : 7);
+  const poolFor = (n) =>
+    n < 5 ? ["I3", "O", "L", "T"] : n < 12 ? ["I3", "O", "L", "T", "I", "Z"] : ["O", "L", "T", "I", "Z", "X", "U", "V"];
 
-  function pickTargets(lv) {
-    const pool = poolFor(lv).slice();
-    for (let i = pool.length - 1; i > 0; i--) { const j = rand(i + 1); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-    const n = targetCountFor(lv);
-    const ids = pool.slice(0, n);
-    while (ids.length < n) ids.push(pool[rand(pool.length)]);
-    return ids.map((id) => ({ id, done: false }));
+  // a shape from the current pool that is not already in another slot (and not `avoid`)
+  function randomPattern(avoid) {
+    const taken = new Set(targets.map((t) => t.id));
+    if (avoid) taken.add(avoid);
+    const pool = poolFor(completed);
+    const free = pool.filter((id) => !taken.has(id));
+    const from = free.length ? free : pool;
+    return from[rand(from.length)];
   }
 
-  function startLevel(lv) {
-    level = lv;
-    colors = colorsFor(lv);
-    levelStart = score;
-    targets = pickTargets(lv);
-    timeLeft = LEVEL_TIME;
+  function newGame() {
+    score = 0;
+    completed = 0;
+    colors = colorsFor(0);
+    combo = 0; comboUntil = 0; bestCombo = 0;
+    swapReadyAt = 0;
+    timeLeft = START_TIME;
     timerOn = false;
     phase = "idle";
     hover = null; blast = null; flash = null; snap = null;
+    targets = [];
+    for (let i = 0; i < SLOTS; i++) targets.push({ id: randomPattern() });
     fill();
     hideOverlay();
     renderTargets();
     updateHud();
     if (tut) { tut.step = "slide"; refreshTutorial(); }
   }
-
-  function newGame() { score = 0; startLevel(1); }
 
   // ---------- HUD ----------
   function shapeEl(id) {
@@ -461,24 +496,56 @@
     return el;
   }
 
-  function renderTargets() {
+  function renderSlot(i, anim) {
     const box = $("targets");
-    box.textContent = "";
-    targets.forEach((t, i) => {
-      const el = document.createElement("div");
-      el.className = "target" + (t.done ? " done" : "");
-      el.dataset.i = i;
-      el.title = PATTERNS[t.id].label;
-      el.appendChild(shapeEl(t.id));
+    let el = box.children[i];
+    if (!el) {
+      el = document.createElement("div");
+      el.className = "target";
+      el.setAttribute("role", "img");
       box.appendChild(el);
-    });
+    }
+    el.textContent = "";
+    el.appendChild(shapeEl(targets[i].id));
+    el.setAttribute("aria-label", `Target shape ${PATTERNS[targets[i].id].label}`);
+    if (anim) { el.classList.remove("pop", "swap", "denied"); void el.offsetWidth; el.classList.add(anim); }
   }
 
-  function markTargetDone(i) {
-    targets[i].done = true;
-    const el = $("targets").children[i];
-    if (el) { el.classList.add("done"); el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+  function renderTargets() {
+    $("targets").textContent = "";
+    targets.forEach((_, i) => renderSlot(i));
   }
+
+  // replaces all three shapes with different ones, then recharges
+  function swapAll() {
+    ensureAudio();
+    if (phase === "over" || overlayOpen) return;
+    const now = performance.now();
+    const btn = $("swapBtn");
+    if (now < swapReadyAt) {
+      btn.classList.remove("denied"); void btn.offsetWidth; btn.classList.add("denied");
+      tone(110, 0.15, "square", 0.04);
+      return;
+    }
+    // pick a whole new set, skipping every old shape while the pool has enough others
+    const old = new Set(targets.map((t) => t.id));
+    const chosen = new Set();
+    const pool = poolFor(completed);
+    targets.forEach((t, i) => {
+      let free = pool.filter((id) => !old.has(id) && !chosen.has(id));
+      if (!free.length) free = pool.filter((id) => !chosen.has(id) && id !== t.id);
+      if (!free.length) free = pool;
+      t.id = free[rand(free.length)];
+      chosen.add(t.id);
+      renderSlot(i, "swap");
+    });
+    swapReadyAt = now + SWAP_COOLDOWN;
+    tone(520, 0.08, "triangle", 0.1);
+    hover = null;
+    if (tut) refreshTutorial();
+  }
+  $("swapBtn").addEventListener("click", swapAll);
+  $("swapBtn").addEventListener("animationend", () => $("swapBtn").classList.remove("denied"));
 
   let lastTimeText = "";
   function updateTime() {
@@ -488,15 +555,35 @@
     const low = timeLeft <= 5;
     $("timeVal").textContent = text;
     $("timeVal").classList.toggle("low", low);
-    $("timeFill").style.width = (timeLeft / LEVEL_TIME) * 100 + "%";
+    $("timeFill").style.width = Math.min(100, (timeLeft / START_TIME) * 100) + "%";
     $("timeFill").classList.toggle("low", low);
   }
 
+  // per-frame meters: combo window and swap cooldown
+  let lastMeters = "";
+  function updateMeters(now) {
+    const comboLeft = phase === "idle" && combo > 0 ? Math.max(0, comboUntil - now) / COMBO_WINDOW : combo > 0 ? 1 : 0;
+    if (phase === "idle" && combo > 0 && now > comboUntil) combo = 0;
+    const cd = Math.min(1, Math.max(0, swapReadyAt - now) / SWAP_COOLDOWN);
+    const key = combo + "|" + comboLeft.toFixed(2) + "|" + cd.toFixed(2);
+    if (key === lastMeters) return;
+    lastMeters = key;
+    $("comboVal").textContent = "×" + Math.max(1, combo);
+    $("comboVal").classList.toggle("hot", combo > 1);
+    $("comboFill").style.width = comboLeft * 100 + "%";
+    const btn = $("swapBtn");
+    btn.style.setProperty("--cd", cd.toFixed(3));
+    btn.classList.toggle("ready", cd === 0);
+    btn.classList.toggle("cooling", cd > 0);
+    $("swapVal").textContent = cd === 0 ? "Swap" : Math.ceil(cd * SWAP_COOLDOWN / 1000) + "s";
+  }
+
   function updateHud() {
-    $("levelVal").textContent = level;
     $("scoreVal").textContent = score.toLocaleString("en-US");
     lastTimeText = "";
+    lastMeters = "";
     updateTime();
+    updateMeters(performance.now());
   }
 
   let toastTimer = 0;
@@ -535,35 +622,20 @@
   }
 
   function checkEnd() {
+    if (timeLeft > 0) return;
     const fmt = (n) => n.toLocaleString("en-US");
-    const doneCount = targets.filter((t) => t.done).length;
-    if (doneCount === targets.length) {
-      timerOn = false;
-      const secs = Math.ceil(timeLeft);
-      const bonus = secs * 20;
-      score += bonus;
-      saveBest();
-      updateHud();
-      phase = "over";
-      tone(523, 0.15); setTimeout(() => tone(659, 0.15), 120); setTimeout(() => tone(784, 0.25), 240);
-      showOverlay(
-        `Level ${level} clear`,
-        `${secs} s left × 20 = <b>+${fmt(bonus)}</b><br>Score <b>${fmt(score)}</b>`,
-        `Play level ${level + 1}`,
-        () => startLevel(level + 1)
-      );
-    } else if (timeLeft <= 0) {
-      timerOn = false;
-      saveBest();
-      phase = "over";
-      tone(196, 0.3, "sine");
-      showOverlay(
-        "Time's up",
-        `Built <b>${doneCount} / ${targets.length}</b> shapes on level <b>${level}</b><br>Score <b>${fmt(score)}</b> · Best <b>${fmt(best)}</b>`,
-        "Retry level",
-        () => { score = levelStart; startLevel(level); }
-      );
-    }
+    const isBest = score > best;
+    timerOn = false;
+    saveBest();
+    phase = "over";
+    combo = 0;
+    tone(196, 0.3, "sine");
+    showOverlay(
+      isBest && score > 0 ? "New best!" : "Time's up",
+      `<b>${completed}</b> shapes · best combo <b>×${Math.max(1, bestCombo)}</b><br>Score <b>${fmt(score)}</b> · Best <b>${fmt(best)}</b>`,
+      "Play again",
+      newGame
+    );
   }
 
   // ---------- actions ----------
@@ -577,17 +649,25 @@
       return;
     }
     if (tut) finishTutorial();
-    markTargetDone(ti);
     const now = performance.now();
+    // the combo window opens when the board settles, so blast and fall time never eat into it
+    combo = combo > 0 && now <= comboUntil ? combo + 1 : 1;
+    comboUntil = Infinity;
+    bestCombo = Math.max(bestCombo, combo);
     let last = 0;
     for (const g of group) {
       const gem = grid[g.r][g.c];
       gem.popAt = now + g.d * 60;
       last = Math.max(last, gem.popAt);
     }
-    const pts = group.length * 100;
+    const pts = group.length * 100 * combo;
     blast = { gems: group, end: last + 220, pts, r, c, n: 0 };
-    flash = { text: PATTERNS[targets[ti].id].label, t: now };
+    flash = { text: PATTERNS[targets[ti].id].label, sub: combo > 1 ? `COMBO ×${combo}` : "", t: now };
+    completed++;
+    colors = colorsFor(completed);
+    timeLeft += TIME_PER_SHAPE;
+    targets[ti].id = randomPattern(targets[ti].id);
+    renderSlot(ti, "pop");
     phase = "blast";
     hover = null;
     score += pts;
@@ -1050,7 +1130,7 @@
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.lineWidth = 5; ctx.strokeStyle = "rgba(20,14,28,0.8)";
       ctx.strokeText(f.text, f.x, f.y - p * cs * 0.9);
-      ctx.fillStyle = ACCENT;
+      ctx.fillStyle = f.color || ACCENT;
       ctx.fillText(f.text, f.x, f.y - p * cs * 0.9);
     }
     ctx.globalAlpha = 1;
@@ -1068,9 +1148,17 @@
         ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.font = `700 ${Math.round(cs * (flash.text.length > 2 ? 0.95 : 1.5))}px Fredoka, sans-serif`;
         ctx.lineWidth = 8; ctx.strokeStyle = "rgba(20,14,28,0.75)";
-        ctx.strokeText(flash.text, 0, 0);
+        const ty = flash.sub ? -cs * 0.3 : 0;
+        ctx.strokeText(flash.text, 0, ty);
         ctx.fillStyle = GOOD;
-        ctx.fillText(flash.text, 0, 0);
+        ctx.fillText(flash.text, 0, ty);
+        if (flash.sub) {
+          ctx.font = `700 ${Math.round(cs * 0.5)}px Fredoka, sans-serif`;
+          ctx.lineWidth = 6;
+          ctx.strokeText(flash.sub, 0, cs * 0.65);
+          ctx.fillStyle = ACCENT;
+          ctx.fillText(flash.sub, 0, cs * 0.65);
+        }
         ctx.restore();
       } else flash = null;
     }
@@ -1107,6 +1195,7 @@
       updateTime();
       if (timeLeft <= 0 && phase === "idle") checkEnd();
     }
+    updateMeters(now);
 
     if (phase === "blast" && blast) {
       for (const b of blast.gems) {
@@ -1120,6 +1209,7 @@
       }
       if (now >= blast.end) {
         floats.push({ text: `+${blast.pts}`, x: (blast.c + 0.5) * cs, y: (blast.r + 0.5) * cs, t: now });
+        floats.push({ text: `+${TIME_PER_SHAPE}s`, x: (blast.c + 0.5) * cs, y: (blast.r + 1.2) * cs, t: now, color: GOOD });
         blast = null;
         dropAndRefill();
       }
@@ -1137,6 +1227,7 @@
       }
       if (!moving) {
         phase = "idle";
+        comboUntil = now + COMBO_WINDOW;
         tone(140, 0.08, "sine", 0.06);
         if (tut) refreshTutorial();
         checkEnd();
@@ -1180,7 +1271,8 @@
       targets: () => targets,
       timeLeft: () => timeLeft,
       setTime: (s) => { timeLeft = s; timerOn = true; },
-      groupAt, tap, slide, startLevel, matchTarget, findMatch, canon, PATTERNS,
+      state: () => ({ score, combo, comboUntil, completed, colors, swapReadyAt, timeLeft }),
+      groupAt, tap, slide, newGame, swapAll, matchTarget, findMatch, canon, PATTERNS,
       // run the game clock synchronously until the board is still again
       settle() {
         let t = performance.now();
@@ -1192,16 +1284,16 @@
 
   // ---------- boot ----------
   window.claude?.hot?.snapshot?.(() => ({
-    v: 2,
+    v: 3,
     grid: grid.map((row) => row.map((g) => g.k)),
-    level, score, levelStart, colors, targets, timeLeft,
+    score, completed, colors, targets, timeLeft, bestCombo,
   }));
 
   function start(data) {
     resize();
     // only restore boards saved by this version of the rules
-    if (data && data.v === 2 && Array.isArray(data.grid) && data.grid.length === N && data.colors === colorsFor(data.level)) {
-      level = data.level; colors = data.colors; score = data.score; levelStart = data.levelStart;
+    if (data && data.v === 3 && Array.isArray(data.grid) && data.grid.length === N && data.colors === colorsFor(data.completed)) {
+      score = data.score; completed = data.completed; colors = data.colors; bestCombo = data.bestCombo || 0;
       targets = data.targets; timeLeft = data.timeLeft; timerOn = false;
       grid = data.grid.map((row) => row.map((k) => newGem(k)));
       renderTargets();
