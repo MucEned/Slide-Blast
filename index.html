@@ -133,6 +133,26 @@
   .swap-btn.ready:hover { background: var(--stone-2); }
   .swap-btn.cooling { color: var(--muted); cursor: default; }
   .swap-btn.denied { animation: targetDenied .3s ease; }
+
+  /* tutorial cues outside the canvas */
+  .target.hint { border-color: var(--good); animation: hintPulse 1s ease-in-out infinite; }
+  @keyframes hintPulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 40%, transparent); } }
+  .swap-wrap { position: relative; }
+  .swap-btn.tut-ring { animation: hintPulse 1s ease-in-out infinite; border-color: var(--good); }
+  .tut-hand {
+    position: absolute;
+    left: calc(50% - 8px);
+    top: calc(50% - 2px);
+    width: 34px;
+    pointer-events: none;
+    transform-origin: 8px 2px;
+    animation: tutTap 1.2s ease-in-out infinite;
+    z-index: 2;
+  }
+  @keyframes tutTap {
+    0%, 100% { transform: rotate(-17deg) translateY(10px); }
+    40%, 55% { transform: rotate(-17deg) translateY(0) scale(0.92); }
+  }
   .combo .value.hot { color: var(--good); }
   .combobar { height: 4px; border-radius: 99px; background: var(--stone); overflow: hidden; }
   .combobar i { display: block; height: 100%; width: 0; background: var(--good); }
@@ -177,6 +197,7 @@
     white-space: nowrap;
   }
   .toast.show { opacity: 1; }
+  .toast.info { background: var(--accent); color: #2a1a00; }
 
   .overlay {
     position: absolute;
@@ -228,7 +249,8 @@
     .tray { gap: 10px; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .target, .target.pop, .target.swap, .target.denied { transition: none; animation: none; }
+    .target, .target.pop, .target.swap, .target.denied, .target.hint, .swap-btn.tut-ring, .tut-hand { transition: none; animation: none; }
+    .tut-hand { transform: rotate(-17deg); }
   }
 </style>
 
@@ -260,10 +282,24 @@
 
   <div class="tray">
     <div class="targets" id="targets" aria-label="Shapes to build"></div>
-    <button class="swap-btn ready" id="swapBtn" type="button" aria-label="Swap all three shapes">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>
-      <span class="count" id="swapVal">Swap</span>
-    </button>
+    <div class="swap-wrap">
+      <button class="swap-btn ready" id="swapBtn" type="button" aria-label="Swap all three shapes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>
+        <span class="count" id="swapVal">Swap</span>
+      </button>
+      <svg class="tut-hand" id="tutHand" hidden viewBox="-12 -3 52 70" aria-hidden="true">
+        <g fill="none" stroke="#1a1222" stroke-width="6" stroke-linejoin="round">
+          <rect x="-7" y="0" width="14" height="40" rx="7"/><rect x="6" y="22" width="11" height="20" rx="5.5"/>
+          <rect x="16" y="25" width="11" height="18" rx="5.5"/><rect x="26" y="29" width="10" height="16" rx="5"/>
+          <rect x="-9" y="30" width="45" height="34" rx="12"/>
+        </g>
+        <g fill="#fff8ee">
+          <rect x="-7" y="0" width="14" height="40" rx="7"/><rect x="6" y="22" width="11" height="20" rx="5.5"/>
+          <rect x="16" y="25" width="11" height="18" rx="5.5"/><rect x="26" y="29" width="10" height="16" rx="5"/>
+          <rect x="-9" y="30" width="45" height="34" rx="12"/>
+        </g>
+      </svg>
+    </div>
   </div>
 
   <div class="board-wrap" id="wrap">
@@ -289,7 +325,8 @@
       <li><b>Drag</b> a row sideways or a column up and down. Gems pushed off one edge come back on the other side. Slides are unlimited.</li>
       <li>Arrange gems of one color into one of the <b>3 target shapes</b> above the board, then <b>tap</b> the group to blast it. Rotated and mirrored shapes count.</li>
       <li>The group must match the shape exactly. If an extra gem of the same color touches it, it won't blast, so slide that gem away first.</li>
-      <li>The game is endless. You start with <b>30 seconds</b>, and every finished shape adds <b>+3 s</b> and brings a new shape. The game ends when the clock hits zero.</li>
+      <li>The game is endless. You start with <b>30 seconds</b>, and every finished shape adds time and brings a new shape. The game ends when the clock hits zero.</li>
+      <li>The higher your score, the harder it gets: bigger shapes appear, up to 2 new gem colors join, and each shape adds less time (3 s, then 2.5 s, then 2 s).</li>
       <li>Don't like the shapes? Press <b>Swap</b> next to them to get 3 new ones. The button recharges for 10 seconds and counts down on its face.</li>
       <li><b>Combo:</b> finish the next shape within 3 seconds of the board settling and the combo grows. Each shape scores 100 per gem × your combo.</li>
     </ul>
@@ -301,7 +338,6 @@
 (() => {
   const N = 8;
   const START_TIME = 30;
-  const TIME_PER_SHAPE = 3;
   const SLOTS = 3;
   const SWAP_COOLDOWN = 10000;
   const COMBO_WINDOW = 3000;
@@ -447,16 +483,25 @@
     }
   }
 
-  // difficulty grows with shapes finished: more colors and bigger shapes join over time
-  const colorsFor = (n) => (n < 10 ? 5 : n < 25 ? 6 : 7);
-  const poolFor = (n) =>
-    n < 5 ? ["I3", "O", "L", "T"] : n < 12 ? ["I3", "O", "L", "T", "I", "Z"] : ["O", "L", "T", "I", "Z", "X", "U", "V"];
+  // difficulty follows the score: up to 2 extra colors, bigger shapes, and less time per shape
+  const DIFFICULTY = [
+    // from score: colors on the board, shapes that can appear, seconds earned per shape
+    { at: 0, colors: 5, time: 3, pool: ["I3", "O", "L", "T"] },
+    { at: 2000, colors: 5, time: 3, pool: ["I3", "O", "L", "T", "I", "Z"] },
+    { at: 4000, colors: 6, time: 2.5, pool: ["I3", "O", "L", "T", "I", "Z"] },
+    { at: 7000, colors: 6, time: 2.5, pool: ["O", "L", "T", "I", "Z", "X", "U", "V"] },
+    { at: 11000, colors: 7, time: 2, pool: ["O", "L", "T", "I", "Z", "X", "U", "V"] },
+  ];
+  const tierFor = (s) => DIFFICULTY.reduce((cur, t) => (s >= t.at ? t : cur), DIFFICULTY[0]);
+  const colorsFor = (s) => tierFor(s).colors;
+  const poolFor = (s) => tierFor(s).pool;
+  const timePerShape = (s) => tierFor(s).time;
 
   // a shape from the current pool that is not already in another slot (and not `avoid`)
   function randomPattern(avoid) {
     const taken = new Set(targets.map((t) => t.id));
     if (avoid) taken.add(avoid);
-    const pool = poolFor(completed);
+    const pool = poolFor(score);
     const free = pool.filter((id) => !taken.has(id));
     const from = free.length ? free : pool;
     return from[rand(from.length)];
@@ -530,7 +575,7 @@
     // pick a whole new set, skipping every old shape while the pool has enough others
     const old = new Set(targets.map((t) => t.id));
     const chosen = new Set();
-    const pool = poolFor(completed);
+    const pool = poolFor(score);
     targets.forEach((t, i) => {
       let free = pool.filter((id) => !old.has(id) && !chosen.has(id));
       if (!free.length) free = pool.filter((id) => !chosen.has(id) && id !== t.id);
@@ -542,7 +587,7 @@
     swapReadyAt = now + SWAP_COOLDOWN;
     tone(520, 0.08, "triangle", 0.1);
     hover = null;
-    if (tut) refreshTutorial();
+    if (tut) { if (tut.step === "swap") finishTutorial(); else refreshTutorial(); }
   }
   $("swapBtn").addEventListener("click", swapAll);
   $("swapBtn").addEventListener("animationend", () => $("swapBtn").classList.remove("denied"));
@@ -587,12 +632,13 @@
   }
 
   let toastTimer = 0;
-  function toast(msg) {
+  function toast(msg, info) {
     const el = $("toast");
     el.textContent = msg;
+    el.classList.toggle("info", !!info);
     el.classList.add("show");
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove("show"), 1100);
+    toastTimer = setTimeout(() => el.classList.remove("show"), info ? 1800 : 1100);
   }
 
   function shakeBoard() {
@@ -648,7 +694,8 @@
       toast(group.length > MAX_PATTERN ? "Too many gems touching" : "Not a target shape");
       return;
     }
-    if (tut) finishTutorial();
+    // tutorial: after the first blast, point at the Swap button next
+    if (tut) { tut.step = "swap"; tut.hint = null; refreshTutorial(); }
     const now = performance.now();
     // the combo window opens when the board settles, so blast and fall time never eat into it
     combo = combo > 0 && now <= comboUntil ? combo + 1 : 1;
@@ -661,16 +708,19 @@
       last = Math.max(last, gem.popAt);
     }
     const pts = group.length * 100 * combo;
-    blast = { gems: group, end: last + 220, pts, r, c, n: 0 };
+    const bonus = timePerShape(score);
     flash = { text: PATTERNS[targets[ti].id].label, sub: combo > 1 ? `COMBO ×${combo}` : "", t: now };
     completed++;
-    colors = colorsFor(completed);
-    timeLeft += TIME_PER_SHAPE;
+    score += pts;
+    timeLeft += bonus;
+    const before = colors;
+    colors = colorsFor(score);
+    if (colors > before) toast("New gem color joins the board", true);
+    blast = { gems: group, end: last + 220, pts, bonus, r, c, n: 0 };
     targets[ti].id = randomPattern(targets[ti].id);
     renderSlot(ti, "pop");
     phase = "blast";
     hover = null;
-    score += pts;
     updateHud();
   }
 
@@ -720,6 +770,8 @@
     const p = pos(e), cell = cellAt(p);
     if (!cell) return;
     snap = null;
+    // skipping the Swap step by playing on also ends the tutorial
+    if (tut && tut.step === "swap") finishTutorial();
     if (!tut) timerOn = true;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     drag = { active: true, id: e.pointerId, sx: p.x, sy: p.y, r: cell.r, c: cell.c, axis: null, off: 0 };
@@ -822,7 +874,7 @@
   // ---------- tutorial (hand gestures on the board, no text) ----------
   let tut = null;
   let tutorialDone = false;
-  try { tutorialDone = localStorage.getItem("slideBlastTutorial2") === "1"; } catch (e) {}
+  try { tutorialDone = localStorage.getItem("slideBlastTutorial3") === "1"; } catch (e) {}
 
   // the shortest single slide that makes a target shape, or a plain demo slide when none exists
   function bestSlide() {
@@ -833,7 +885,8 @@
         slide(axis, idx, shift);
         for (let i = 0; i < N && !found; i++) {
           const g = axis === "h" ? groupAt(idx, i) : groupAt(i, idx);
-          if (matchTarget(g) >= 0) found = { axis, idx, shift };
+          const ti = matchTarget(g);
+          if (ti >= 0) found = { axis, idx, shift, ti };
         }
         slide(axis, idx, -shift);
       }
@@ -844,11 +897,24 @@
     return h;
   }
 
+  // pulse the tray slot the current hint builds, so the shape on the board and in the tray read as one
+  function markHintSlot(i) {
+    [...$("targets").children].forEach((el, j) => el.classList.toggle("hint", j === i));
+  }
+
+  function showSwapHand(on) {
+    $("tutHand").toggleAttribute("hidden", !on); // an <svg> has no .hidden property
+    $("swapBtn").classList.toggle("tut-ring", on);
+  }
+
+  // steps: slide (hand drags a lane) -> tap (hand taps the finished shape) -> swap (hand taps the Swap button)
   function refreshTutorial() {
-    if (!tut) return;
+    if (!tut) { markHintSlot(-1); showSwapHand(false); return; }
+    if (tut.step === "swap") { markHintSlot(-1); showSwapHand(true); return; }
+    showSwapHand(false);
     const g = findMatch();
-    if (g) { tut.step = "tap"; tut.hint = g; }
-    else { tut.step = "slide"; tut.hint = bestSlide(); }
+    if (g) { tut.step = "tap"; tut.hint = g; markHintSlot(matchTarget(g)); }
+    else { tut.step = "slide"; tut.hint = bestSlide(); markHintSlot(tut.hint.ti ?? -1); }
   }
 
   function startTutorial() {
@@ -862,7 +928,8 @@
     tut = null;
     tutorialDone = true;
     timerOn = true;
-    try { localStorage.setItem("slideBlastTutorial2", "1"); } catch (e) {}
+    refreshTutorial();
+    try { localStorage.setItem("slideBlastTutorial3", "1"); } catch (e) {}
   }
 
   // Fingertip sits at (x, y); press 0..1 squashes it slightly.
@@ -1209,7 +1276,7 @@
       }
       if (now >= blast.end) {
         floats.push({ text: `+${blast.pts}`, x: (blast.c + 0.5) * cs, y: (blast.r + 0.5) * cs, t: now });
-        floats.push({ text: `+${TIME_PER_SHAPE}s`, x: (blast.c + 0.5) * cs, y: (blast.r + 1.2) * cs, t: now, color: GOOD });
+        floats.push({ text: `+${blast.bonus}s`, x: (blast.c + 0.5) * cs, y: (blast.r + 1.2) * cs, t: now, color: GOOD });
         blast = null;
         dropAndRefill();
       }
@@ -1292,7 +1359,7 @@
   function start(data) {
     resize();
     // only restore boards saved by this version of the rules
-    if (data && data.v === 3 && Array.isArray(data.grid) && data.grid.length === N && data.colors === colorsFor(data.completed)) {
+    if (data && data.v === 3 && Array.isArray(data.grid) && data.grid.length === N && data.colors === colorsFor(data.score)) {
       score = data.score; completed = data.completed; colors = data.colors; bestCombo = data.bestCombo || 0;
       targets = data.targets; timeLeft = data.timeLeft; timerOn = false;
       grid = data.grid.map((row) => row.map((k) => newGem(k)));
