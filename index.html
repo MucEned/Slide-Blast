@@ -21,20 +21,24 @@
     --mono: "DM Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
     color-scheme: dark;
   }
-  body { background: var(--bg); color: var(--ink); font-family: var(--body); }
+  /* one-screen app: html/body fill the viewport (inside the safe-area padding) and the board takes the space left */
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--body); overflow: hidden; overscroll-behavior: none; }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
 
   .app {
+    height: 100%;
     max-width: 560px;
     margin: 0 auto;
-    padding-block: 20px 36px;
+    padding-block: 14px 10px;
     padding-left: max(16px, env(safe-area-inset-left, 0px));
     padding-right: max(16px, env(safe-area-inset-right, 0px));
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
+  .app > * { flex: none; }
 
   .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   h1 {
@@ -160,8 +164,26 @@
   .shape b { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
   .shape b.off { background: transparent; }
 
-  .board-wrap { position: relative; width: 100%; max-width: 520px; margin: 0 auto; }
-  .board-wrap.shake-x { animation: shakeX .4s ease; }
+  .app { justify-content: center; }
+  .app > .board-wrap { display: grid; place-items: center; }
+  .board-box { position: relative; width: 100%; max-width: 520px; aspect-ratio: 1; }
+  .board-wrap.shake-x .board-box { animation: shakeX .4s ease; }
+  /* Break gets a heavy two-axis rumble; normal shape blasts don't move the board */
+  .board-wrap.rumble .board-box { animation: rumble .5s linear; }
+  @keyframes rumble {
+    0% { transform: translate(0, 0) rotate(0); }
+    10% { transform: translate(-7px, 5px) rotate(-1.2deg); }
+    20% { transform: translate(8px, -6px) rotate(1deg); }
+    30% { transform: translate(-6px, -5px) rotate(-0.8deg); }
+    40% { transform: translate(6px, 6px) rotate(0.8deg); }
+    55% { transform: translate(-4px, 3px) rotate(-0.4deg); }
+    70% { transform: translate(3px, -3px) rotate(0.3deg); }
+    85% { transform: translate(-1px, 1px); }
+    100% { transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .board-wrap.rumble .board-box { animation-duration: .25s; }
+  }
   @keyframes shakeX {
     15% { transform: translateX(-10px); } 30% { transform: translateX(9px); } 45% { transform: translateX(-7px); }
     60% { transform: translateX(5px); } 75% { transform: translateX(-3px); } 100% { transform: none; }
@@ -169,8 +191,7 @@
   canvas {
     display: block;
     width: 100%;
-    max-width: 100%;
-    aspect-ratio: 1;
+    height: 100%;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
@@ -224,15 +245,33 @@
 
   .how { align-self: center; background: transparent; color: var(--muted); }
   .how[aria-expanded="true"] { color: var(--ink); border-color: var(--accent); }
+  /* rules open as a sheet over the game, since the page itself never scrolls */
   .rules {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    max-width: 560px;
+    max-height: 82%;
+    margin: 0 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
     background: var(--panel);
-    border-radius: 16px;
-    padding: 14px 16px;
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+    padding-top: 16px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+    padding-left: max(18px, env(safe-area-inset-left, 0px));
+    padding-right: max(18px, env(safe-area-inset-right, 0px));
     display: grid;
     gap: 10px;
     font-size: 0.92rem;
     line-height: 1.5;
   }
+  .rules-actions { display: flex; gap: 8px; }
   .rules-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .rules h3 { margin: 0; font-family: var(--display); font-weight: 600; font-size: 1.05rem; }
   .rules ul { margin: 0; padding-left: 1.1em; display: grid; gap: 4px; }
@@ -241,12 +280,49 @@
   .legend figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); }
   .legend .target { width: 46px; height: 46px; }
 
+  h1, .top button { white-space: nowrap; }
+  @media (max-width: 360px) {
+    h1 { font-size: 1.2rem !important; }
+    .top button { padding: 7px 9px !important; font-size: 0.75rem !important; }
+  }
+  .break-dial {
+    position: relative;
+    overflow: hidden;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    background: var(--panel);
+    color: var(--muted);
+    display: grid;
+    place-content: center;
+    gap: 1px;
+    text-align: center;
+  }
+  .break-dial::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: conic-gradient(rgba(20, 14, 28, 0.7) calc(var(--cd, 0) * 360deg), transparent 0);
+  }
+  .break-dial > * { position: relative; }
+  .break-dial svg { width: 16px; height: 16px; margin: 0 auto; display: block; }
+  .break-dial .count { font: 500 0.75rem/1 var(--mono); font-variant-numeric: tabular-nums; }
+  .break-dial.ready { border-color: var(--accent); color: var(--accent); }
+  .break-dial.denied { animation: targetDenied .3s ease; }
+
   @media (max-width: 420px) {
-    .hud { gap: 6px 10px; padding: 10px 12px; }
-    .value { font-size: 1.1rem; }
-    .time .value { font-size: 1.35rem; }
-    .target { width: 58px; height: 58px; }
-    .tray { gap: 10px; }
+    .app { padding-block: 10px 8px; gap: 8px; }
+    h1 { font-size: 1.45rem; }
+    .top button { padding: 8px 11px; font-size: 0.8rem; }
+    .hud { gap: 4px 10px; padding: 8px 12px; }
+    .value { font-size: 1.05rem; }
+    .time .value { font-size: 1.3rem; }
+    .tray, .targets { gap: 8px; }
+    .target { width: clamp(44px, 14vw, 56px); height: clamp(44px, 14vw, 56px); }
+    .swap-btn { width: clamp(48px, 15vw, 58px); height: clamp(48px, 15vw, 58px); }
+    .break-dial { width: clamp(42px, 12.5vw, 48px); height: clamp(42px, 12.5vw, 48px); }
+    .how { padding: 7px 14px; }
   }
   @media (prefers-reduced-motion: reduce) {
     .target, .target.pop, .target.swap, .target.denied, .target.hint, .swap-btn.tut-ring, .tut-hand { transition: none; animation: none; }
@@ -300,16 +376,22 @@
         </g>
       </svg>
     </div>
+    <div class="break-dial ready" id="breakDial" role="status" aria-label="Break: tap a clump of 5 or more matching gems to clear it">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/></svg>
+      <span class="count" id="breakVal">5+</span>
+    </div>
   </div>
 
   <div class="board-wrap" id="wrap">
-    <canvas id="board" aria-label="Game board: drag a row or column to slide it, tap a same-color group that forms a target shape to blast it"></canvas>
-    <div class="toast" id="toast"></div>
-    <div class="overlay" id="overlay" hidden>
-      <div class="card">
-        <h2 id="ovTitle"></h2>
-        <p id="ovText"></p>
-        <button id="ovBtn" type="button"></button>
+    <div class="board-box" id="boardBox">
+      <canvas id="board" aria-label="Game board: drag a row or column to slide it, tap a same-color group that forms a target shape to blast it"></canvas>
+      <div class="toast" id="toast"></div>
+      <div class="overlay" id="overlay" hidden>
+        <div class="card">
+          <h2 id="ovTitle"></h2>
+          <p id="ovText"></p>
+          <button id="ovBtn" type="button"></button>
+        </div>
       </div>
     </div>
   </div>
@@ -319,7 +401,10 @@
   <section class="rules" id="rules" hidden>
     <div class="rules-head">
       <h3>How to play</h3>
-      <button id="replayBtn" type="button">Show me on the board</button>
+      <div class="rules-actions">
+        <button id="replayBtn" type="button">Show me on the board</button>
+        <button id="closeRulesBtn" type="button">Close</button>
+      </div>
     </div>
     <ul>
       <li><b>Drag</b> a row sideways or a column up and down. Gems pushed off one edge come back on the other side. Slides are unlimited.</li>
@@ -327,6 +412,7 @@
       <li>The group must match the shape exactly. If an extra gem of the same color touches it, it won't blast, so slide that gem away first.</li>
       <li>The game is endless. You start with <b>30 seconds</b>, and every finished shape adds time and brings a new shape. The game ends when the clock hits zero.</li>
       <li>The higher your score, the harder it gets: bigger shapes appear, up to 2 new gem colors join, and each shape adds less time (3 s, then 2.5 s, then 2 s).</li>
+      <li><b>Break:</b> tap a clump of 5 or more same-color gems that isn't a target to clear it out of your way. It scores nothing, adds no time, and recharges for 10 seconds (the dial next to Swap).</li>
       <li>Don't like the shapes? Press <b>Swap</b> next to them to get 3 new ones. The button recharges for 10 seconds and counts down on its face.</li>
       <li><b>Combo:</b> finish the next shape within 3 seconds of the board settling and the combo grows. Each shape scores 100 per gem × your combo.</li>
     </ul>
@@ -341,6 +427,8 @@
   const SLOTS = 3;
   const SWAP_COOLDOWN = 10000;
   const COMBO_WINDOW = 3000;
+  const BREAK_MIN = 5;
+  const BREAK_COOLDOWN = 10000;
   const TAU = Math.PI * 2;
   const GEMS = [
     { base: "#ff4f6a", light: "#ffc2cb", dark: "#9c1431" }, // ruby: circle
@@ -399,7 +487,7 @@
   let targets = [];
   let timeLeft = START_TIME, timerOn = false;
   let combo = 0, comboUntil = 0, bestCombo = 0;
-  let swapReadyAt = 0;
+  let swapReadyAt = 0, breakReadyAt = 0, lastWasBreak = false;
   let best = 0;
   let phase = "idle"; // idle | blast | fall | over
   let drag = { active: false };
@@ -513,6 +601,7 @@
     colors = colorsFor(0);
     combo = 0; comboUntil = 0; bestCombo = 0;
     swapReadyAt = 0;
+    breakReadyAt = 0;
     timeLeft = START_TIME;
     timerOn = false;
     phase = "idle";
@@ -610,7 +699,8 @@
     const comboLeft = phase === "idle" && combo > 0 ? Math.max(0, comboUntil - now) / COMBO_WINDOW : combo > 0 ? 1 : 0;
     if (phase === "idle" && combo > 0 && now > comboUntil) combo = 0;
     const cd = Math.min(1, Math.max(0, swapReadyAt - now) / SWAP_COOLDOWN);
-    const key = combo + "|" + comboLeft.toFixed(2) + "|" + cd.toFixed(2);
+    const bcd = Math.min(1, Math.max(0, breakReadyAt - now) / BREAK_COOLDOWN);
+    const key = combo + "|" + comboLeft.toFixed(2) + "|" + cd.toFixed(2) + "|" + bcd.toFixed(2);
     if (key === lastMeters) return;
     lastMeters = key;
     $("comboVal").textContent = "×" + Math.max(1, combo);
@@ -621,6 +711,10 @@
     btn.classList.toggle("ready", cd === 0);
     btn.classList.toggle("cooling", cd > 0);
     $("swapVal").textContent = cd === 0 ? "Swap" : Math.ceil(cd * SWAP_COOLDOWN / 1000) + "s";
+    const dial = $("breakDial");
+    dial.style.setProperty("--cd", bcd.toFixed(3));
+    dial.classList.toggle("ready", bcd === 0);
+    $("breakVal").textContent = bcd === 0 ? "5+" : Math.ceil(bcd * BREAK_COOLDOWN / 1000) + "s";
   }
 
   function updateHud() {
@@ -646,7 +740,7 @@
     void wrap.offsetWidth;
     wrap.classList.add("shake-x");
   }
-  wrap.addEventListener("animationend", () => wrap.classList.remove("shake-x"));
+  wrap.addEventListener("animationend", () => wrap.classList.remove("shake-x", "rumble"));
 
   function showOverlay(title, html, btn, onClick) {
     $("ovTitle").textContent = title;
@@ -689,9 +783,13 @@
     const group = groupAt(r, c);
     const ti = matchTarget(group);
     if (ti < 0) {
+      if (group.length >= BREAK_MIN && performance.now() >= breakReadyAt) { breakGroup(group, r, c); return; }
       for (const g of group) grid[g.r][g.c].shake = performance.now();
       tone(110, 0.15, "square", 0.04);
-      toast(group.length > MAX_PATTERN ? "Too many gems touching" : "Not a target shape");
+      if (group.length >= BREAK_MIN) {
+        restartAnim($("breakDial"), "denied");
+        toast(`Break ready in ${Math.ceil((breakReadyAt - performance.now()) / 1000)} s`);
+      } else toast("Not a target shape");
       return;
     }
     // tutorial: after the first blast, point at the Swap button next
@@ -722,6 +820,34 @@
     phase = "blast";
     hover = null;
     updateHud();
+  }
+
+  // Break: clear any off-pattern clump of BREAK_MIN+ gems. No points, no time, no combo step; recharges for 10 s.
+  function breakGroup(group, r, c) {
+    const now = performance.now();
+    let last = 0;
+    for (const g of group) {
+      const gem = grid[g.r][g.c];
+      gem.popAt = now + g.d * 45;
+      last = Math.max(last, gem.popAt);
+    }
+    breakReadyAt = now + BREAK_COOLDOWN;
+    blast = { gems: group, end: last + 220, pts: 0, bonus: 0, r, c, n: 0, isBreak: true };
+    flash = { text: "BREAK", sub: "", t: now, color: ACCENT };
+    tone(150, 0.25, "sawtooth", 0.08);
+    tone(70, 0.45, "sine", 0.18);
+    wrap.classList.remove("shake-x");
+    restartAnim(wrap, "rumble");
+    try { navigator.vibrate?.([40, 30, 60]); } catch (e) {}
+    phase = "blast";
+    hover = null;
+    updateHud();
+  }
+
+  function restartAnim(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
   }
 
   function slide(axis, idx, shift) {
@@ -847,18 +973,17 @@
     }, 2500);
   });
 
-  $("howBtn").addEventListener("click", () => {
-    const rules = $("rules");
-    rules.hidden = !rules.hidden;
-    $("howBtn").setAttribute("aria-expanded", String(!rules.hidden));
-    if (!rules.hidden) rules.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  });
-  $("replayBtn").addEventListener("click", () => {
-    $("rules").hidden = true;
-    $("howBtn").setAttribute("aria-expanded", "false");
-    startTutorial();
-    wrap.scrollIntoView({ behavior: "smooth", block: "center" });
-  });
+  // the clock pauses while the rules sheet is open
+  let rulesOpen = false;
+  function setRules(open) {
+    rulesOpen = open;
+    $("rules").hidden = !open;
+    $("howBtn").setAttribute("aria-expanded", String(open));
+    if (open) $("closeRulesBtn").focus({ preventScroll: true });
+  }
+  $("howBtn").addEventListener("click", () => setRules(!rulesOpen));
+  $("closeRulesBtn").addEventListener("click", () => setRules(false));
+  $("replayBtn").addEventListener("click", () => { setRules(false); startTutorial(); });
 
   for (const [id, p] of Object.entries(PATTERNS)) {
     const fig = document.createElement("figure");
@@ -1079,28 +1204,37 @@
     }
   }
 
+  // Square gem tiles, so a same-color group reads like the block icons in the tray.
+  // A small embossed glyph keeps colors tellable apart without relying on hue alone.
   function drawGem(k, cx, cy, scale, alpha) {
-    const R = cs * 0.4;
+    const s = cs * 0.44, q = cs * 0.13;
     const g = GEMS[k];
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
     ctx.globalAlpha = alpha;
     ctx.lineJoin = "round";
-    gemPath(k, R);
-    const grd = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.08, 0, 0, R * 1.15);
+    rr(-s, -s, s * 2, s * 2, q);
+    const grd = ctx.createLinearGradient(-s, -s, s, s);
     grd.addColorStop(0, g.light);
-    grd.addColorStop(0.45, g.base);
+    grd.addColorStop(0.35, g.base);
     grd.addColorStop(1, g.dark);
     ctx.fillStyle = grd;
     ctx.fill();
-    ctx.lineWidth = Math.max(1.5, R * 0.09);
+    ctx.lineWidth = Math.max(1.5, cs * 0.035);
     ctx.strokeStyle = g.dark;
     ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(-R * 0.28, -R * 0.36, R * 0.26, R * 0.12, -0.6, 0, TAU);
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
+    // bevel: bright top edge
+    rr(-s + cs * 0.06, -s + cs * 0.05, s * 2 - cs * 0.12, cs * 0.16, q * 0.6);
+    ctx.fillStyle = "rgba(255,255,255,0.38)";
     ctx.fill();
+    // embossed glyph
+    gemPath(k, cs * 0.16);
+    ctx.fillStyle = "rgba(255,255,255,0.32)";
+    ctx.fill();
+    ctx.lineWidth = Math.max(1, cs * 0.02);
+    ctx.strokeStyle = "rgba(0,0,0,0.18)";
+    ctx.stroke();
     ctx.restore();
   }
 
@@ -1124,12 +1258,13 @@
 
     // hovered group: green when it matches an open target
     const hoverOk = hover && matchTarget(hover) >= 0;
+    const hoverBreak = hover && !hoverOk && hover.length >= BREAK_MIN && now >= breakReadyAt;
     if (hover && hover.length > 1) {
       for (const h of hover) {
         rr(h.c * cs + 3, h.r * cs + 3, cs - 6, cs - 6, cs * 0.22);
-        ctx.fillStyle = hoverOk ? "rgba(91,227,155,0.22)" : "rgba(255,255,255,0.07)";
+        ctx.fillStyle = hoverOk ? "rgba(91,227,155,0.22)" : hoverBreak ? "rgba(255,190,85,0.18)" : "rgba(255,255,255,0.07)";
         ctx.fill();
-        if (hoverOk) { ctx.lineWidth = 2; ctx.strokeStyle = GOOD; ctx.stroke(); }
+        if (hoverOk || hoverBreak) { ctx.lineWidth = 2; ctx.strokeStyle = hoverOk ? GOOD : ACCENT; ctx.setLineDash(hoverBreak ? [5, 4] : []); ctx.stroke(); ctx.setLineDash([]); }
       }
     }
 
@@ -1176,16 +1311,17 @@
     if (hover && hover.length > 1) {
       const h = hover[0];
       const ti = matchTarget(hover);
-      const label = ti >= 0 ? PATTERNS[targets[ti].id].label : `${hover.length}`;
+      const canBreak = ti < 0 && hover.length >= BREAK_MIN && now >= breakReadyAt;
+      const label = ti >= 0 ? PATTERNS[targets[ti].id].label : canBreak ? `BREAK ${hover.length}` : `${hover.length}`;
       ctx.font = `600 ${Math.round(cs * 0.28)}px "DM Mono", monospace`;
       const w = ctx.measureText(label).width + cs * 0.3, hgt = cs * 0.42;
       let bx = (h.c + 0.5) * cs - w / 2, by = h.r * cs - hgt - 4;
       if (by < 2) by = (h.r + 1) * cs + 4;
       bx = Math.max(2, Math.min(size - w - 2, bx));
       rr(bx, by, w, hgt, hgt / 2);
-      ctx.fillStyle = ti >= 0 ? GOOD : "rgba(20,14,28,0.85)";
+      ctx.fillStyle = ti >= 0 ? GOOD : canBreak ? ACCENT : "rgba(20,14,28,0.85)";
       ctx.fill();
-      ctx.fillStyle = ti >= 0 ? "#10241a" : INK;
+      ctx.fillStyle = ti >= 0 ? "#10241a" : canBreak ? "#2a1a00" : INK;
       ctx.textAlign = "center"; ctx.textBaseline = "middle";
       ctx.fillText(label, bx + w / 2, by + hgt / 2 + 1);
     }
@@ -1217,7 +1353,7 @@
         ctx.lineWidth = 8; ctx.strokeStyle = "rgba(20,14,28,0.75)";
         const ty = flash.sub ? -cs * 0.3 : 0;
         ctx.strokeText(flash.text, 0, ty);
-        ctx.fillStyle = GOOD;
+        ctx.fillStyle = flash.color || GOOD;
         ctx.fillText(flash.text, 0, ty);
         if (flash.sub) {
           ctx.font = `700 ${Math.round(cs * 0.5)}px Fredoka, sans-serif`;
@@ -1232,8 +1368,21 @@
   }
 
   // ---------- update ----------
-  function burst(r, c, k) {
+  function burst(r, c, k, heavy) {
     const cx = (c + 0.5) * cs, cy = (r + 0.5) * cs;
+    // Break throws heavier gray rubble that drops fast instead of colored sparkles
+    if (heavy) {
+      for (let i = 0; i < 7; i++) {
+        const a = -Math.PI / 2 + (Math.random() - 0.5) * 2.4, sp = cs * (1.5 + Math.random() * 2.5);
+        particles.push({
+          x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+          r: cs * (0.08 + Math.random() * 0.08),
+          color: i % 2 ? "#6d6178" : GEMS[k].dark,
+          life: 0.7, max: 0.7,
+        });
+      }
+      return;
+    }
     for (let i = 0; i < 8; i++) {
       const a = Math.random() * TAU, sp = cs * (2 + Math.random() * 4);
       particles.push({
@@ -1255,7 +1404,7 @@
       }
     }
 
-    if (timerOn && phase !== "over" && !overlayOpen) {
+    if (timerOn && phase !== "over" && !overlayOpen && !rulesOpen) {
       timeLeft = Math.max(0, timeLeft - clockDt);
       const whole = Math.ceil(timeLeft);
       if (timeLeft <= 5 && whole !== lastTick && timeLeft > 0) { lastTick = whole; tone(880, 0.05, "square", 0.04); }
@@ -1270,13 +1419,17 @@
         if (!g.popped && now >= g.popAt) {
           g.popped = true;
           blast.n++;
-          burst(b.r, b.c, g.k);
-          tone(392 * Math.pow(2, (blast.n - 1) * 2 / 12), 0.12);
+          burst(b.r, b.c, g.k, blast.isBreak);
+          if (blast.isBreak) tone(Math.max(50, 110 - blast.n * 6), 0.1, "square", 0.05);
+          else tone(392 * Math.pow(2, (blast.n - 1) * 2 / 12), 0.12);
         }
       }
       if (now >= blast.end) {
-        floats.push({ text: `+${blast.pts}`, x: (blast.c + 0.5) * cs, y: (blast.r + 0.5) * cs, t: now });
-        floats.push({ text: `+${blast.bonus}s`, x: (blast.c + 0.5) * cs, y: (blast.r + 1.2) * cs, t: now, color: GOOD });
+        if (!blast.isBreak) {
+          floats.push({ text: `+${blast.pts}`, x: (blast.c + 0.5) * cs, y: (blast.r + 0.5) * cs, t: now });
+          floats.push({ text: `+${blast.bonus}s`, x: (blast.c + 0.5) * cs, y: (blast.r + 1.2) * cs, t: now, color: GOOD });
+        }
+        lastWasBreak = !!blast.isBreak;
         blast = null;
         dropAndRefill();
       }
@@ -1294,7 +1447,8 @@
       }
       if (!moving) {
         phase = "idle";
-        comboUntil = now + COMBO_WINDOW;
+        // a break never opens or extends the combo window
+        if (!lastWasBreak) comboUntil = now + COMBO_WINDOW;
         tone(140, 0.08, "sine", 0.06);
         if (tut) refreshTutorial();
         checkEnd();
@@ -1320,15 +1474,27 @@
     requestAnimationFrame(frame);
   }
 
+  // the board is the largest square that fits the space left under the HUD and tray
+  const app = document.querySelector(".app");
   function resize() {
     dpr = window.devicePixelRatio || 1;
-    size = Math.round(canvas.getBoundingClientRect().width) || Math.min(wrap.clientWidth, 520);
+    const st = getComputedStyle(app);
+    const gap = parseFloat(st.rowGap) || 0;
+    const others = [...app.children].filter((el) => el !== wrap && !el.hidden && getComputedStyle(el).position !== "fixed");
+    const used = others.reduce((s, el) => s + el.offsetHeight, 0) + gap * others.length;
+    const availH = app.clientHeight - parseFloat(st.paddingTop) - parseFloat(st.paddingBottom) - used;
+    const availW = app.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
+    size = Math.max(160, Math.floor(Math.min(availW, availH, 520)));
+    wrap.style.height = size + "px";
+    $("boardBox").style.width = size + "px";
     canvas.width = Math.round(size * dpr);
     canvas.height = Math.round(size * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     cs = size / N;
   }
   window.addEventListener("resize", resize);
+  if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(app);
+  document.fonts?.ready.then(resize);
 
   // ---------- local test hook (file:// and localhost only) ----------
   if (location.protocol === "file:" || location.protocol === "data:" || location.hostname === "localhost") {
@@ -1338,7 +1504,7 @@
       targets: () => targets,
       timeLeft: () => timeLeft,
       setTime: (s) => { timeLeft = s; timerOn = true; },
-      state: () => ({ score, combo, comboUntil, completed, colors, swapReadyAt, timeLeft }),
+      state: () => ({ score, combo, comboUntil, completed, colors, swapReadyAt, breakReadyAt, timeLeft }),
       groupAt, tap, slide, newGame, swapAll, matchTarget, findMatch, canon, PATTERNS,
       // run the game clock synchronously until the board is still again
       settle() {
