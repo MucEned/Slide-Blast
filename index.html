@@ -104,6 +104,14 @@
     border-radius: 14px;
     overflow: hidden;
   }
+  /* a single target gets a bigger slot */
+  .targets .target { width: 76px; height: 76px; }
+  .targets .shape { gap: 3px; }
+  .targets .shape b { width: 12px; height: 12px; border-radius: 3px; }
+  @media (max-width: 420px) {
+    .targets .target { width: 66px; height: 66px; }
+    .targets .shape b { width: 10px; height: 10px; }
+  }
   .target.pop { animation: targetPop .45s ease; }
   .target.swap { animation: targetSwap .35s ease; }
   .target.denied { animation: targetDenied .3s ease; }
@@ -138,6 +146,10 @@
   .swap-btn.cooling { color: var(--muted); cursor: default; }
   .swap-btn.denied { animation: targetDenied .3s ease; }
 
+  /* the tray shape is already built somewhere on the board */
+  .target.onboard { border-color: var(--good); background: color-mix(in srgb, var(--good) 14%, var(--panel)); }
+  .target.onboard .shape b:not(.off) { background: var(--good); }
+
   /* tutorial cues outside the canvas */
   .target.hint { border-color: var(--good); animation: hintPulse 1s ease-in-out infinite; }
   @keyframes hintPulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 40%, transparent); } }
@@ -168,6 +180,24 @@
   .app > .board-wrap { display: grid; place-items: center; }
   .board-box { position: relative; width: 100%; max-width: 520px; aspect-ratio: 1; }
   .board-wrap.shake-x .board-box { animation: shakeX .4s ease; }
+  /* a finished shape: the board glows green and the score / clock pop */
+  .board-box { border-radius: 18px; }
+  .board-wrap.win .board-box { animation: winGlow .7s ease-out; }
+  @keyframes winGlow {
+    25% { box-shadow: 0 0 0 3px var(--good), 0 0 36px 8px color-mix(in srgb, var(--good) 55%, transparent); transform: scale(1.012); }
+    100% { box-shadow: 0 0 0 0 transparent; transform: none; }
+  }
+  #scoreVal, #timeVal { transition: color .3s; }
+  #scoreVal { transform-origin: left center; }
+  #timeVal { transform-origin: right center; }
+  .value.bump { animation: bump .5s ease-out; }
+  .value.bump-good { animation: bumpGood .5s ease-out; }
+  @keyframes bump { 30% { transform: scale(1.35); color: var(--accent); } }
+  @keyframes bumpGood { 30% { transform: scale(1.3); color: var(--good); } }
+  @media (prefers-reduced-motion: reduce) {
+    .board-wrap.win .board-box, .value.bump, .value.bump-good { animation-duration: .01s; }
+  }
+
   /* Break gets a heavy two-axis rumble; normal shape blasts don't move the board */
   .board-wrap.rumble .board-box { animation: rumble .5s linear; }
   @keyframes rumble {
@@ -359,7 +389,7 @@
   <div class="tray">
     <div class="targets" id="targets" aria-label="Shapes to build"></div>
     <div class="swap-wrap">
-      <button class="swap-btn ready" id="swapBtn" type="button" aria-label="Swap all three shapes">
+      <button class="swap-btn ready" id="swapBtn" type="button" aria-label="Swap the target shape">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>
         <span class="count" id="swapVal">Swap</span>
       </button>
@@ -408,12 +438,14 @@
     </div>
     <ul>
       <li><b>Drag</b> a row sideways or a column up and down. Gems pushed off one edge come back on the other side. Slides are unlimited.</li>
-      <li>Arrange gems of one color into one of the <b>3 target shapes</b> above the board, then <b>tap</b> the group to blast it. Rotated and mirrored shapes count.</li>
+      <li>Arrange gems of one color into the <b>target shape</b> above the board. The moment your slide completes it, it <b>blasts by itself</b>. Rotated and mirrored shapes count.</li>
+      <li>If falling gems happen to form the shape, it glows green but waits for you: <b>tap</b> it to take it.</li>
       <li>The group must match the shape exactly. If an extra gem of the same color touches it, it won't blast, so slide that gem away first.</li>
-      <li>The game is endless. You start with <b>30 seconds</b>, and every finished shape adds time and brings a new shape. The game ends when the clock hits zero.</li>
+      <li>The game is endless. You start with <b>30 seconds</b>, and every finished shape adds time and brings a new shape. Slides are unlimited.</li>
+      <li>The game ends when the clock hits zero.</li>
       <li>The higher your score, the harder it gets: bigger shapes appear, up to 2 new gem colors join, and each shape adds less time (3 s, then 2.5 s, then 2 s).</li>
       <li><b>Break:</b> tap a clump of 5 or more same-color gems that isn't a target to clear it out of your way. It scores nothing, adds no time, and recharges for 10 seconds (the dial next to Swap).</li>
-      <li>Don't like the shapes? Press <b>Swap</b> next to them to get 3 new ones. The button recharges for 10 seconds and counts down on its face.</li>
+      <li>Don't like the shape? Press <b>Swap</b> next to it to get a different one. The button recharges for 10 seconds and counts down on its face.</li>
       <li><b>Combo:</b> finish the next shape within 3 seconds of the board settling and the combo grows. Each shape scores 100 per gem × your combo.</li>
     </ul>
     <div class="legend" id="legend" aria-label="All shapes"></div>
@@ -424,7 +456,7 @@
 (() => {
   const N = 8;
   const START_TIME = 30;
-  const SLOTS = 3;
+  const SLOTS = 1;
   const SWAP_COOLDOWN = 10000;
   const COMBO_WINDOW = 3000;
   const BREAK_MIN = 5;
@@ -468,7 +500,7 @@
     }
     return best;
   }
-  for (const p of Object.values(PATTERNS)) p.key = canon(p.cells);
+  for (const p of Object.values(PATTERNS)) { p.key = canon(p.cells); }
 
   const canvas = document.getElementById("board");
   const ctx = canvas.getContext("2d");
@@ -648,9 +680,48 @@
   function renderTargets() {
     $("targets").textContent = "";
     targets.forEach((_, i) => renderSlot(i));
+    matchSig = "";
   }
 
-  // replaces all three shapes with different ones, then recharges
+  // exact shapes on the board, recomputed only when the board or the targets change
+  let matchSig = "", matchList = [];
+  function currentMatches() {
+    const sig = grid.map((row) => row.map((g) => g.k).join("")).join("") + "|" + targets.map((t) => t.id).join();
+    if (sig === matchSig) return matchList;
+    matchSig = sig;
+    matchList = exactMatches().map((m) => ({ ...m, keys: new Set(m.group.map((g) => g.r * N + g.c)) }));
+    [...$("targets").children].forEach((el, i) => el.classList.toggle("onboard", matchList.some((m) => m.ti === i)));
+    return matchList;
+  }
+
+  // pulsing green fill plus an outline traced around the shape's outer edge
+  function drawMatches(now) {
+    const ms = currentMatches();
+    if (!ms.length) return;
+    const pulse = 0.55 + 0.45 * Math.sin(now / 220);
+    ctx.save();
+    ctx.lineCap = "round";
+    for (const m of ms) {
+      for (const g of m.group) {
+        rr(g.c * cs + 2, g.r * cs + 2, cs - 4, cs - 4, cs * 0.16);
+        ctx.fillStyle = `rgba(91,227,155,${0.16 + 0.16 * pulse})`;
+        ctx.fill();
+      }
+      ctx.beginPath();
+      for (const g of m.group) {
+        const x = g.c * cs, y = g.r * cs, inset = 1.5;
+        if (g.r === 0 || !m.keys.has((g.r - 1) * N + g.c)) { ctx.moveTo(x + inset, y + inset); ctx.lineTo(x + cs - inset, y + inset); }
+        if (g.r === N - 1 || !m.keys.has((g.r + 1) * N + g.c)) { ctx.moveTo(x + inset, y + cs - inset); ctx.lineTo(x + cs - inset, y + cs - inset); }
+        if (g.c === 0 || !m.keys.has(g.r * N + g.c - 1)) { ctx.moveTo(x + inset, y + inset); ctx.lineTo(x + inset, y + cs - inset); }
+        if (g.c === N - 1 || !m.keys.has(g.r * N + g.c + 1)) { ctx.moveTo(x + cs - inset, y + inset); ctx.lineTo(x + cs - inset, y + cs - inset); }
+      }
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = `rgba(91,227,155,${0.6 + 0.4 * pulse})`;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // replaces the target shape(s) with different ones, then recharges
   function swapAll() {
     ensureAudio();
     if (phase === "over" || overlayOpen) return;
@@ -740,7 +811,7 @@
     void wrap.offsetWidth;
     wrap.classList.add("shake-x");
   }
-  wrap.addEventListener("animationend", () => wrap.classList.remove("shake-x", "rumble"));
+  wrap.addEventListener("animationend", () => wrap.classList.remove("shake-x", "rumble", "win"));
 
   function showOverlay(title, html, btn, onClick) {
     $("ovTitle").textContent = title;
@@ -761,7 +832,9 @@
     }
   }
 
+  // The run ends when the clock hits zero.
   function checkEnd() {
+    if (phase !== "idle") return;
     if (timeLeft > 0) return;
     const fmt = (n) => n.toLocaleString("en-US");
     const isBest = score > best;
@@ -792,6 +865,32 @@
       } else toast("Not a target shape");
       return;
     }
+    blastShape(group, ti, r, c);
+  }
+
+  // every exact target shape on the board, keyed by its cells
+  function exactMatches() {
+    const out = [], seen = new Set();
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (seen.has(r * N + c)) continue;
+      const group = groupAt(r, c);
+      for (const g of group) seen.add(g.r * N + g.c);
+      const ti = matchTarget(group);
+      if (ti >= 0) out.push({ group, ti, key: group.map((g) => g.r * N + g.c).sort((a, b) => a - b).join(",") });
+    }
+    return out;
+  }
+
+  // After a slide settles, a shape the slide created blasts by itself. That includes a shape left behind when
+  // the slide pulled an extra gem away. Shapes that were already there (from falling gems) wait for a tap,
+  // so falls never chain.
+  function autoBlast(before) {
+    if (phase !== "idle" || overlayOpen) return;
+    const fresh = exactMatches().find((m) => !before.has(m.key));
+    if (fresh) blastShape(fresh.group, fresh.ti, fresh.group[0].r, fresh.group[0].c);
+  }
+
+  function blastShape(group, ti, r, c) {
     // tutorial: after the first blast, point at the Swap button next
     if (tut) { tut.step = "swap"; tut.hint = null; refreshTutorial(); }
     const now = performance.now();
@@ -817,9 +916,26 @@
     blast = { gems: group, end: last + 220, pts, bonus, r, c, n: 0 };
     targets[ti].id = randomPattern(targets[ti].id);
     renderSlot(ti, "pop");
+    for (const el of $("targets").children) el.classList.remove("onboard");
     phase = "blast";
     hover = null;
     updateHud();
+    celebrate(group, now);
+  }
+
+  // positive feedback for a finished shape: shockwave rings from the shape's center, a green board glow,
+  // the score and clock popping, and a rising chord (one note higher per combo step)
+  let rings = [];
+  function celebrate(group, now) {
+    const cx = (group.reduce((s, g) => s + g.c, 0) / group.length + 0.5) * cs;
+    const cy = (group.reduce((s, g) => s + g.r, 0) / group.length + 0.5) * cs;
+    const waves = 1 + Math.min(combo, 3);
+    for (let i = 0; i < waves; i++) rings.push({ x: cx, y: cy, t: now + i * 110, color: i % 2 ? ACCENT : GOOD });
+    restartAnim(wrap, "win");
+    restartAnim($("scoreVal"), "bump");
+    restartAnim($("timeVal"), "bump-good");
+    const base = 523 * Math.pow(2, Math.min(combo - 1, 7) / 12);
+    [1, 1.26, 1.5].forEach((m, i) => setTimeout(() => tone(base * m, 0.18, "triangle", 0.09), i * 70));
   }
 
   // Break: clear any off-pattern clump of BREAK_MIN+ gems. No points, no time, no combo step; recharges for 10 s.
@@ -892,10 +1008,11 @@
 
   canvas.addEventListener("pointerdown", (e) => {
     ensureAudio();
+    // a quick follow-up drag cuts the snap short; still check what the last slide built
+    if (snap) { const s = snap; snap = null; if (s.moved) autoBlast(s.before); }
     if (phase !== "idle" || overlayOpen || timeLeft <= 0) return;
     const p = pos(e), cell = cellAt(p);
     if (!cell) return;
-    snap = null;
     // skipping the Swap step by playing on also ends the tutorial
     if (tut && tut.step === "swap") finishTutorial();
     if (!tut) timerOn = true;
@@ -933,12 +1050,13 @@
     }
     const idx = d.axis === "h" ? d.r : d.c;
     const shift = cancelled ? 0 : Math.round(d.off / cs);
+    const before = new Set(exactMatches().map((m) => m.key));
     if (mod(shift, N) !== 0) {
       slide(d.axis, idx, shift);
       tone(170 + Math.abs(shift) * 25, 0.07, "sine", 0.08);
       if (tut) { tut.t0 = performance.now(); refreshTutorial(); }
     }
-    snap = { axis: d.axis, idx, off: d.off - shift * cs };
+    snap = { axis: d.axis, idx, off: d.off - shift * cs, moved: mod(shift, N) !== 0, before };
     hover = null;
     pendingHover = e.pointerType === "mouse" ? cellAt(pos(e)) : null;
   }
@@ -1204,37 +1322,28 @@
     }
   }
 
-  // Square gem tiles, so a same-color group reads like the block icons in the tray.
-  // A small embossed glyph keeps colors tellable apart without relying on hue alone.
   function drawGem(k, cx, cy, scale, alpha) {
-    const s = cs * 0.44, q = cs * 0.13;
+    const R = cs * 0.4;
     const g = GEMS[k];
     ctx.save();
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
     ctx.globalAlpha = alpha;
     ctx.lineJoin = "round";
-    rr(-s, -s, s * 2, s * 2, q);
-    const grd = ctx.createLinearGradient(-s, -s, s, s);
+    gemPath(k, R);
+    const grd = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.08, 0, 0, R * 1.15);
     grd.addColorStop(0, g.light);
-    grd.addColorStop(0.35, g.base);
+    grd.addColorStop(0.45, g.base);
     grd.addColorStop(1, g.dark);
     ctx.fillStyle = grd;
     ctx.fill();
-    ctx.lineWidth = Math.max(1.5, cs * 0.035);
+    ctx.lineWidth = Math.max(1.5, R * 0.09);
     ctx.strokeStyle = g.dark;
     ctx.stroke();
-    // bevel: bright top edge
-    rr(-s + cs * 0.06, -s + cs * 0.05, s * 2 - cs * 0.12, cs * 0.16, q * 0.6);
-    ctx.fillStyle = "rgba(255,255,255,0.38)";
+    ctx.beginPath();
+    ctx.ellipse(-R * 0.28, -R * 0.36, R * 0.26, R * 0.12, -0.6, 0, TAU);
+    ctx.fillStyle = "rgba(255,255,255,0.6)";
     ctx.fill();
-    // embossed glyph
-    gemPath(k, cs * 0.16);
-    ctx.fillStyle = "rgba(255,255,255,0.32)";
-    ctx.fill();
-    ctx.lineWidth = Math.max(1, cs * 0.02);
-    ctx.strokeStyle = "rgba(0,0,0,0.18)";
-    ctx.stroke();
     ctx.restore();
   }
 
@@ -1299,12 +1408,40 @@
       ctx.globalAlpha = Math.max(0, p.life / p.max);
       ctx.fillStyle = p.color;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, TAU);
+      if (p.star) {
+        // four-point twinkle
+        const s = p.r * (0.8 + 0.4 * Math.sin(p.life * 30));
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.moveTo(0, -s * 2); ctx.quadraticCurveTo(0, 0, s * 2, 0); ctx.quadraticCurveTo(0, 0, 0, s * 2);
+        ctx.quadraticCurveTo(0, 0, -s * 2, 0); ctx.quadraticCurveTo(0, 0, 0, -s * 2);
+        ctx.restore();
+      } else ctx.arc(p.x, p.y, p.r, 0, TAU);
       ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // shockwave rings
+    for (const g of rings) {
+      const p = (now - g.t) / 650;
+      if (p < 0 || p > 1) continue;
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, cs * (0.4 + 3.2 * (1 - Math.pow(1 - p, 3))), 0, TAU);
+      ctx.lineWidth = cs * 0.14 * (1 - p) + 1;
+      ctx.strokeStyle = g.color;
+      ctx.globalAlpha = 0.85 * (1 - p);
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
     ctx.restore();
 
+    // shapes already on the board glow green (tap to take them); while dragging, preview the board as if released now
+    if (phase === "idle" && !overlayOpen) {
+      if (drag.active && drag.axis) {
+        const shift = Math.round(drag.off / cs), idx = drag.axis === "h" ? drag.r : drag.c;
+        if (mod(shift, N)) { slide(drag.axis, idx, shift); drawMatches(now); slide(drag.axis, idx, -shift); }
+      } else if (!drag.axis && !snap) drawMatches(now);
+    }
     drawTutorial(now);
 
     // badge over the hovered group
@@ -1392,6 +1529,15 @@
         life: 0.55, max: 0.55,
       });
     }
+    // golden stars that float up out of a scored gem
+    for (let i = 0; i < 3; i++) {
+      particles.push({
+        x: cx + (Math.random() - 0.5) * cs * 0.6, y: cy, vx: (Math.random() - 0.5) * cs * 2, vy: -cs * (1.5 + Math.random() * 2),
+        r: cs * (0.06 + Math.random() * 0.05), star: true, rot: Math.random() * TAU, vr: (Math.random() - 0.5) * 8,
+        color: i ? ACCENT : "#fff3d6",
+        life: 0.9, max: 0.9,
+      });
+    }
   }
 
   let lastTick = 0;
@@ -1399,8 +1545,10 @@
     if (snap) {
       snap.off += (0 - snap.off) * Math.min(1, dt * 20);
       if (Math.abs(snap.off) < 0.5) {
+        const s = snap;
         snap = null;
         if (pendingHover) { hover = groupAt(pendingHover.r, pendingHover.c); pendingHover = null; }
+        if (s.moved) autoBlast(s.before);
       }
     }
 
@@ -1456,12 +1604,15 @@
     }
 
     for (const p of particles) {
-      p.vy += cs * 14 * dt;
+      // stars float up and drift; everything else falls
+      p.vy += (p.star ? -cs * 1.5 : cs * 14) * dt;
+      if (p.star) { p.rot += p.vr * dt; p.vx *= 0.97; }
       p.x += p.vx * dt; p.y += p.vy * dt;
       p.life -= dt;
     }
     particles = particles.filter((p) => p.life > 0);
     floats = floats.filter((f) => now - f.t < 1000);
+    rings = rings.filter((g) => now - g.t < 650);
   }
 
   let last = performance.now();
@@ -1525,7 +1676,7 @@
   function start(data) {
     resize();
     // only restore boards saved by this version of the rules
-    if (data && data.v === 3 && Array.isArray(data.grid) && data.grid.length === N && data.colors === colorsFor(data.score)) {
+    if (data && data.v === 3 && Array.isArray(data.grid) && data.grid.length === N && data.colors === colorsFor(data.score) && data.targets?.length === SLOTS) {
       score = data.score; completed = data.completed; colors = data.colors; bestCombo = data.bestCombo || 0;
       targets = data.targets; timeLeft = data.timeLeft; timerOn = false;
       grid = data.grid.map((row) => row.map((k) => newGem(k)));
