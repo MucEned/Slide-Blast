@@ -5,7 +5,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=DM+Mono:wght@500&family=Nunito:wght@400;600;700&display=swap">
 <style>
   /* Layout: portrait game screen. Top bar = score, target shape, clock. Middle = the largest square board that fits.
-     Bottom dock = small help/sound/music buttons, Swap, and the draggable Break bomb. Single dark "gem cave" look by choice. */
+     Bottom dock = small help/sound/music buttons and the draggable Explode bomb. Single dark "gem cave" look by choice. */
   :root {
     --bg: #1f1828;
     --panel: #2b2238;
@@ -221,10 +221,10 @@
   .card button { background: var(--accent); color: #2a1a00; border: 0; font-size: 1rem; padding: 12px 22px; margin-top: 6px; }
   .card button:hover { filter: brightness(1.08); }
 
-  /* ---------- bottom dock: small buttons | Swap | Break ---------- */
+  /* ---------- bottom dock: small buttons | Explode ---------- */
   .dock {
     display: grid;
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto;
     align-items: center;
     gap: 14px;
     padding: 8px 12px;
@@ -273,7 +273,12 @@
   .tool svg { width: 22px; height: 22px; margin: 0 auto; display: block; }
   .tool .count { font: 500 0.8rem/1 var(--mono); font-variant-numeric: tabular-nums; }
   .tool.ready { border-color: var(--accent); color: var(--accent); }
-  .swap-btn.cooling, .break-dial:not(.ready) { cursor: default; }
+  .break-dial:not(.ready) { cursor: default; }
+  /* the one big tool in the dock */
+  .break-dial { width: 72px; height: 72px; }
+  .break-dial .count { font-size: 0.66rem; letter-spacing: -0.02em; }
+  .app.tight .break-dial { width: 56px; height: 56px; }
+  .app.tight .break-dial .count { font-size: 0.58rem; }
   .tool.denied { animation: targetDenied .3s ease; }
   .break-dial { touch-action: none; user-select: none; -webkit-user-select: none; cursor: grab; }
   .break-dial.dragging { opacity: 0.35; }
@@ -317,8 +322,7 @@
   /* tutorial cues outside the canvas */
   .target.hint { border-color: var(--good); animation: hintPulse 1s ease-in-out infinite; }
   @keyframes hintPulse { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 40%, transparent); } }
-  .swap-wrap { position: relative; }
-  .swap-btn.tut-ring, .break-dial.tut-ring { animation: hintPulse 1s ease-in-out infinite; border-color: var(--good); }
+  .break-dial.tut-ring { animation: hintPulse 1s ease-in-out infinite; border-color: var(--good); }
   /* Break step of the tutorial: bomb + hand travelling from the dock to the board */
   .tut-drag { position: fixed; z-index: 35; width: 0; height: 0; pointer-events: none; visibility: hidden; }
   .tut-drag .bomb-ghost { position: absolute; left: 0; top: 0; }
@@ -373,6 +377,19 @@
   .legend figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--muted); }
   .legend .target { width: 46px; height: 46px; }
 
+  /* tight: phones whose screen is short for its width (e.g. inside an app with toolbars) shrink the header
+     and dock so the board can stay full width */
+  .app.tight { gap: 6px; padding-block: 6px 6px; }
+  .app.tight .topbar { padding: 4px 10px 6px; gap: 4px 10px; }
+  .app.tight .value { font-size: 1.15rem; }
+  .app.tight .label { font-size: 0.6rem; }
+  .app.tight .targets .target { width: 54px; height: 54px; border-radius: 14px; }
+  .app.tight .targets .shape b { width: 9px; height: 9px; }
+  .app.tight .timebar { height: 5px; }
+  .app.tight .dock { padding: 4px 10px; border-radius: 18px; }
+  .app.tight .tool { width: 50px; height: 50px; }
+  .app.tight .tool svg { width: 18px; height: 18px; }
+  .app.tight .icon-btn { width: 34px; height: 34px; }
   @media (max-width: 380px) {
     .app { gap: 8px; }
     .topbar { padding: 6px 10px 8px; }
@@ -387,7 +404,7 @@
   @media (prefers-reduced-motion: reduce) {
     .board-wrap.win .board-box, .value.bump, .value.bump-good { animation-duration: .01s; }
     .board-wrap.rumble .board-box { animation-duration: .25s; }
-    .target, .target.pop, .target.swap, .target.denied, .target.hint, .swap-btn.tut-ring, .tut-hand { transition: none; animation: none; }
+    .target, .target.pop, .target.swap, .target.denied, .target.hint, .break-dial.tut-ring, .tut-hand { transition: none; animation: none; }
     .tut-hand { transform: rotate(-17deg); }
   }
 </style>
@@ -434,27 +451,21 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/><path class="off-only" d="M3 3l18 18"/></svg>
       </button>
     </div>
-    <div class="swap-wrap">
-      <button class="tool swap-btn ready" id="swapBtn" type="button" aria-label="Swap the target shape">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h13l-3.5-3.5M20 15H7l3.5 3.5"/></svg>
-        <span class="count" id="swapVal">Swap</span>
-      </button>
-      <svg class="tut-hand" id="tutHand" hidden viewBox="-12 -3 52 70" aria-hidden="true">
-        <g fill="none" stroke="#1a1222" stroke-width="6" stroke-linejoin="round">
-          <rect x="-7" y="0" width="14" height="40" rx="7"/><rect x="6" y="22" width="11" height="20" rx="5.5"/>
-          <rect x="16" y="25" width="11" height="18" rx="5.5"/><rect x="26" y="29" width="10" height="16" rx="5"/>
-          <rect x="-9" y="30" width="45" height="34" rx="12"/>
-        </g>
-        <g fill="#fff8ee">
-          <rect x="-7" y="0" width="14" height="40" rx="7"/><rect x="6" y="22" width="11" height="20" rx="5.5"/>
-          <rect x="16" y="25" width="11" height="18" rx="5.5"/><rect x="26" y="29" width="10" height="16" rx="5"/>
-          <rect x="-9" y="30" width="45" height="34" rx="12"/>
-        </g>
-      </svg>
-    </div>
-    <div class="tool break-dial ready" id="breakDial" role="button" tabindex="0" aria-label="Break: drag this bomb onto a clump of 5 or more same-color gems to clear it">
+    <svg class="tut-hand" id="tutHand" hidden viewBox="-12 -3 52 70" aria-hidden="true">
+      <g fill="none" stroke="#1a1222" stroke-width="6" stroke-linejoin="round">
+        <rect x="-7" y="0" width="14" height="40" rx="7"/><rect x="6" y="22" width="11" height="20" rx="5.5"/>
+        <rect x="16" y="25" width="11" height="18" rx="5.5"/><rect x="26" y="29" width="10" height="16" rx="5"/>
+        <rect x="-9" y="30" width="45" height="34" rx="12"/>
+      </g>
+      <g fill="#fff8ee">
+        <rect x="-7" y="0" width="14" height="40" rx="7"/><rect x="6" y="22" width="11" height="20" rx="5.5"/>
+        <rect x="16" y="25" width="11" height="18" rx="5.5"/><rect x="26" y="29" width="10" height="16" rx="5"/>
+        <rect x="-9" y="30" width="45" height="34" rx="12"/>
+      </g>
+    </svg>
+    <div class="tool break-dial ready" id="breakDial" role="button" tabindex="0" aria-label="Explode: drag this bomb onto any group of gems to blow it up for points">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="14" r="6.5"/><path d="M15.5 9.5l2-2M17 6l1.5-1.5M19.5 6.5l1 .3M18.5 3.5l.3-1"/></svg>
-      <span class="count" id="breakVal">Break</span>
+      <span class="count" id="breakVal">Explode</span>
     </div>
   </footer>
 
@@ -472,10 +483,13 @@
       <li>Arrange gems of one color into the <b>target shape</b> at the top. The moment your slide completes it, it <b>blasts by itself</b>. Rotated and mirrored shapes count.</li>
       <li>If falling gems happen to form the shape, it glows green but waits for you: <b>tap</b> it to take it.</li>
       <li>The group must match the shape exactly. If an extra gem of the same color touches it, it won't blast, so slide that gem away first.</li>
-      <li>The game is endless. You start with <b>30 seconds</b>, and every finished shape adds time and brings a new shape. The game ends when the clock hits zero.</li>
-      <li>The higher your score, the harder it gets: bigger shapes appear, up to 2 new gem colors join, and each shape adds less time (3 s, then 2.5 s, then 2 s).</li>
-      <li><b>Break:</b> drag the bomb from the bottom right onto a clump of 5 or more same-color gems to clear it out of your way. It scores nothing, adds no time, and recharges for 10 seconds.</li>
-      <li><b>Swap</b> at the bottom gives you a different target shape. It recharges for 10 seconds and counts down on its face.</li>
+      <li>The game is endless. You start with <b>60 seconds</b>, and every finished shape adds time and brings a new shape. The game ends when the clock hits zero.</li>
+      <li>The higher your score, the harder it gets: bigger and trickier shapes appear (up to 6 gems), up to 2 new gem colors join, and each shape adds less time (3 s, then 2.5 s, then 2 s).</li>
+      <li><b>Explode:</b> drag the bomb from the bottom right onto any group of same-color gems. The group blows up and scores 100 per gem, so bigger groups are worth more. It adds no time and recharges for 10 seconds.</li>
+      <li><b>Special gems</b> sometimes fall in:
+        a <b>bomb gem</b> glows orange with embers circling it; when it blasts, the 8 gems around it go too, and a bomb caught in that blast goes off as well.
+        An <b>electric gem</b> crackles with blue lightning; when it blasts, every gem of its color on the board goes with it.
+        Every gem an effect destroys scores extra points.</li>
       <li><b>Double:</b> if two or more groups match the target at the same moment, they all blast together and that blast scores <b>×3 points</b>.</li>
       <li><b>Combo:</b> finish the next shape within 3 seconds of the board settling and the combo grows. Each shape scores 100 per gem × your combo.</li>
     </ul>
@@ -485,12 +499,10 @@
 
 <script>
 (() => {
-  const N = 8;
-  const START_TIME = 30;
+  const N = 6;
+  const START_TIME = 60;
   const SLOTS = 1;
-  const SWAP_COOLDOWN = 10000;
   const COMBO_WINDOW = 3000;
-  const BREAK_MIN = 5;
   const BREAK_COOLDOWN = 10000;
   const TAU = Math.PI * 2;
   const GEMS = [
@@ -509,13 +521,18 @@
     O: { label: "SQUARE", cells: [[0, 0], [0, 1], [1, 0], [1, 1]] },
     L: { label: "L", cells: [[0, 0], [1, 0], [2, 0], [2, 1]] },
     T: { label: "T", cells: [[0, 0], [0, 1], [0, 2], [1, 1]] },
-    I: { label: "I", cells: [[0, 0], [1, 0], [2, 0], [3, 0]] },
     Z: { label: "Z", cells: [[0, 0], [0, 1], [1, 1], [1, 2]] },
     X: { label: "PLUS", cells: [[0, 1], [1, 0], [1, 1], [1, 2], [2, 1]] },
     U: { label: "U", cells: [[0, 0], [0, 2], [1, 0], [1, 1], [1, 2]] },
     V: { label: "V", cells: [[0, 0], [1, 0], [2, 0], [2, 1], [2, 2]] },
+    // harder shapes for late in a run (every shape fits inside a 3x3 box)
+    P: { label: "P", cells: [[0, 0], [0, 1], [1, 0], [1, 1], [2, 0]] },
+    W: { label: "W", cells: [[0, 0], [1, 0], [1, 1], [2, 1], [2, 2]] },
+    F: { label: "F", cells: [[0, 1], [0, 2], [1, 0], [1, 1], [2, 1]] },
+    R6: { label: "BLOCK", cells: [[0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [1, 2]] },
+    T5: { label: "BIG T", cells: [[0, 0], [0, 1], [0, 2], [1, 1], [2, 1]] },
   };
-  const MAX_PATTERN = 5;
+  const MAX_PATTERN = 6;
 
   function canon(cells) {
     let best = null;
@@ -550,7 +567,7 @@
   let targets = [];
   let timeLeft = START_TIME, timerOn = false;
   let combo = 0, comboUntil = 0, bestCombo = 0;
-  let swapReadyAt = 0, breakReadyAt = 0, lastWasBreak = false;
+  let breakReadyAt = 0, lastWasBreak = false;
   let best = 0;
   let phase = "idle"; // idle | blast | fall | over
   let drag = { active: false };
@@ -615,55 +632,79 @@
     src.stop(t + dur + 0.05);
   }
 
-  // Background music: a slow C-Am-F-G pad (one chord per 8 beats at 70 bpm) with sparse pentatonic plucks,
-  // scheduled a little ahead of the audio clock so it never stutters.
-  const CHORDS = [[48, 55, 60, 64], [45, 52, 57, 60], [41, 48, 53, 57], [43, 50, 55, 59]];
-  const MELODY = [72, 74, 76, 79, 81, 84];
-  let musicBpm = 70; // raised by the low-time alarm
+  // Background music: an upbeat casual loop, C-G-Am-F with one chord per bar, played in eighth notes:
+  // kick on 1 and 3, clap on 2 and 4, offbeat hats and chord stabs, a bouncing bass and a catchy square-wave lead.
+  // Scheduled a little ahead of the audio clock so it never stutters; the low-time alarm raises the tempo.
+  const PROG = [[48, 52, 55], [43, 47, 50], [45, 48, 52], [41, 45, 48]]; // C, G, Am, F
+  const LEAD = [
+    [76, 79, 0, 76, 74, 72, 0, 74],
+    [74, 0, 79, 0, 74, 76, 74, 0],
+    [72, 76, 81, 0, 79, 76, 0, 72],
+    [69, 72, 77, 0, 76, 72, 74, 0],
+  ];
+  const BASS_STEPS = [0, 12, 7, 12, 0, 12, 7, 5]; // semitones above the chord root, per eighth
+  let musicBpm = 124; // raised by the low-time alarm
   const beatLen = () => 60 / musicBpm;
   const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
-  let musicTimer = 0, nextBeat = 0, beatNo = 0;
-  function padChord(notes, t, dur) {
-    const lp = actx.createBiquadFilter();
-    lp.type = "lowpass"; lp.frequency.value = 900;
-    lp.connect(musicBus);
-    for (const n of notes) {
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = "triangle"; o.frequency.value = midi(n);
-      o.detune.value = (Math.random() - 0.5) * 8;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.022, t + 1.4);
-      g.gain.setValueAtTime(0.022, t + dur - 1.2);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.6);
-      o.connect(g).connect(lp);
-      o.start(t); o.stop(t + dur + 0.7);
-    }
-  }
-  function pluck(n, t) {
-    const o = actx.createOscillator(), g = actx.createGain();
-    o.type = "sine"; o.frequency.value = midi(n);
+  let musicTimer = 0, nextStep = 0, stepNo = 0;
+  function voice(type, freq, t, dur, vol, cutoff) {
+    const o = actx.createOscillator(), g = actx.createGain(), f = actx.createBiquadFilter();
+    o.type = type; o.frequency.value = freq;
+    f.type = "lowpass"; f.frequency.value = cutoff;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.045, t + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.1);
-    o.connect(g).connect(musicBus);
-    o.start(t); o.stop(t + 1.2);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(f).connect(g).connect(musicBus);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  function drum(kind, t) {
+    if (kind === "kick") {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.frequency.setValueAtTime(150, t);
+      o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
+      g.gain.setValueAtTime(0.17, t);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o.connect(g).connect(musicBus);
+      o.start(t); o.stop(t + 0.22);
+      return;
+    }
+    const src = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    const snare = kind === "snare", dur = snare ? 0.13 : 0.04;
+    src.buffer = noiseBuf;
+    f.type = snare ? "bandpass" : "highpass";
+    f.frequency.value = snare ? 1800 : 7000;
+    f.Q.value = 0.8;
+    g.gain.setValueAtTime(snare ? 0.07 : 0.025, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(f).connect(g).connect(musicBus);
+    src.start(t, Math.random() * 0.5);
+    src.stop(t + dur + 0.02);
+  }
+  function playStep(st, t, e) {
+    const bar = Math.floor(st / 8) % 4, s8 = st % 8, cycle = Math.floor(st / 32);
+    const chord = PROG[bar];
+    if (s8 === 0 || s8 === 4) drum("kick", t);
+    if (s8 === 2 || s8 === 6) drum("snare", t);
+    if (s8 % 2 === 1) drum("hat", t);
+    voice("triangle", midi(chord[0] - 12 + BASS_STEPS[s8]), t, e * 0.9, 0.09, 700);
+    if (s8 % 2 === 1) for (const n of chord) voice("square", midi(n + 24), t, e * 0.55, 0.011, 2600);
+    // the lead plays the hook; every other pass it skips a few notes, every fourth pass it jumps an octave
+    const note = LEAD[bar][s8];
+    if (note && !(cycle % 2 === 1 && Math.random() < 0.25)) voice("square", midi(note + (cycle % 4 === 3 ? 12 : 0)), t, e * 1.6, 0.028, 3200);
   }
   function startMusic() {
     if (musicTimer || !actx) return;
     musicBus.gain.cancelScheduledValues(actx.currentTime);
-    musicBus.gain.setTargetAtTime(1, actx.currentTime, 0.8);
-    nextBeat = actx.currentTime + 0.1;
+    musicBus.gain.setTargetAtTime(1, actx.currentTime, 0.4);
+    nextStep = actx.currentTime + 0.1;
     musicTimer = setInterval(() => {
-      while (nextBeat < actx.currentTime + 0.6) {
-        const b = beatLen();
-        if (beatNo % 8 === 0) padChord(CHORDS[Math.floor(beatNo / 8) % 4], nextBeat, b * 8);
-        // plucks get busier as the tempo rises
-        const busy = musicBpm > 70 ? 0.8 : 0.55;
-        if ((beatNo % 2 === 0 || musicBpm > 100) && Math.random() < busy) pluck(MELODY[rand(MELODY.length)], nextBeat + (Math.random() < 0.3 ? b / 2 : 0));
-        nextBeat += b;
-        beatNo++;
+      while (nextStep < actx.currentTime + 0.4) {
+        const e = beatLen() / 2;
+        playStep(stepNo, nextStep, e);
+        nextStep += e;
+        stepNo++;
       }
-    }, 150);
+    }, 100);
   }
   function stopMusic() {
     clearInterval(musicTimer);
@@ -677,10 +718,33 @@
   });
 
   // ---------- board ----------
-  function newGem(k) { return { k, id: uid++, oy: 0, vy: 0, popAt: 0, popped: false, shake: 0, land: 0, glint: 0 }; }
+  // k is a color index, or WILD for a rainbow gem; sp marks a special colored gem: "bomb" or "zap" (electric)
+  const WILD = 99;
+  function newGem(k, sp = null) { return { k, sp, id: uid++, oy: 0, vy: 0, popAt: 0, popped: false, shake: 0, land: 0, glint: 0 }; }
 
-  function groupAt(r, c) {
-    const k = grid[r][c].k;
+  // New gems are sometimes special: 2% bomb, 1.2% electric. (Rainbow WILD gems are supported but no longer spawn.)
+  function spawnGem() {
+    const roll = Math.random();
+    return newGem(rand(colors), roll > 0.98 ? "bomb" : roll > 0.968 ? "zap" : null);
+  }
+
+  function neighborColors(r, c) {
+    const out = [];
+    for (const [dy, dx] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const ny = r + dy, nx = c + dx;
+      if (ny < 0 || nx < 0 || ny >= N || nx >= N) continue;
+      const k = grid[ny][nx].k;
+      if (k !== WILD && !out.includes(k)) out.push(k);
+    }
+    return out;
+  }
+
+  // Same-color group around (r, c). Rainbow gems join any color's group. A rainbow start takes the color `kk`,
+  // or its first colored neighbour's.
+  function groupAt(r, c, kk) {
+    let k = kk ?? grid[r][c].k;
+    if (k === WILD) k = neighborColors(r, c)[0] ?? WILD;
+    if (k === WILD) return [{ r, c, d: 0 }];
     const dist = new Map();
     const out = [];
     const q = [[r, c, 0]];
@@ -691,7 +755,8 @@
       for (const [dy, dx] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
         const ny = y + dy, nx = x + dx;
         if (ny < 0 || nx < 0 || ny >= N || nx >= N) continue;
-        if (dist.has(ny * N + nx) || grid[ny][nx].k !== k) continue;
+        const nk = grid[ny][nx].k;
+        if (dist.has(ny * N + nx) || (nk !== k && nk !== WILD)) continue;
         dist.set(ny * N + nx, d + 1);
         q.push([ny, nx, d + 1]);
       }
@@ -708,6 +773,7 @@
 
   function findMatch() {
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      if (grid[r][c].k === WILD) continue;
       const g = groupAt(r, c);
       if (matchTarget(g) >= 0) return g;
     }
@@ -720,7 +786,7 @@
       grid = [];
       for (let r = 0; r < N; r++) {
         grid.push([]);
-        for (let c = 0; c < N; c++) grid[r].push(newGem(rand(colors)));
+        for (let c = 0; c < N; c++) grid[r].push(spawnGem());
       }
       if (!findMatch()) return;
     }
@@ -730,10 +796,12 @@
   const DIFFICULTY = [
     // from score: colors on the board, shapes that can appear, seconds earned per shape
     { at: 0, colors: 5, time: 3, pool: ["I3", "O", "L", "T"] },
-    { at: 2000, colors: 5, time: 3, pool: ["I3", "O", "L", "T", "I", "Z"] },
-    { at: 4000, colors: 6, time: 2.5, pool: ["I3", "O", "L", "T", "I", "Z"] },
-    { at: 7000, colors: 6, time: 2.5, pool: ["O", "L", "T", "I", "Z", "X", "U", "V"] },
-    { at: 11000, colors: 7, time: 2, pool: ["O", "L", "T", "I", "Z", "X", "U", "V"] },
+    { at: 2000, colors: 5, time: 3, pool: ["I3", "O", "L", "T", "Z"] },
+    { at: 4000, colors: 6, time: 2.5, pool: ["I3", "O", "L", "T", "Z"] },
+    { at: 7000, colors: 6, time: 2.5, pool: ["O", "L", "T", "Z", "X", "U", "V"] },
+    { at: 11000, colors: 7, time: 2, pool: ["O", "L", "T", "Z", "X", "U", "V"] },
+    { at: 16000, colors: 7, time: 2, pool: ["L", "T", "Z", "X", "U", "V", "P", "W", "T5"] },
+    { at: 24000, colors: 7, time: 2, pool: ["T", "X", "U", "V", "P", "W", "F", "T5", "R6"] },
   ];
   const tierFor = (s) => DIFFICULTY.reduce((cur, t) => (s >= t.at ? t : cur), DIFFICULTY[0]);
   const colorsFor = (s) => tierFor(s).colors;
@@ -755,7 +823,6 @@
     completed = 0;
     colors = colorsFor(0);
     combo = 0; comboUntil = 0; bestCombo = 0;
-    swapReadyAt = 0;
     breakReadyAt = 0;
     timeLeft = START_TIME;
     timerOn = false;
@@ -844,37 +911,6 @@
     }
     ctx.restore();
   }
-  // replaces the target shape(s) with different ones, then recharges
-  function swapAll() {
-    ensureAudio();
-    if (phase === "over" || overlayOpen) return;
-    const now = performance.now();
-    const btn = $("swapBtn");
-    if (now < swapReadyAt) {
-      btn.classList.remove("denied"); void btn.offsetWidth; btn.classList.add("denied");
-      tone(110, 0.15, "square", 0.04);
-      return;
-    }
-    // pick a whole new set, skipping every old shape while the pool has enough others
-    const old = new Set(targets.map((t) => t.id));
-    const chosen = new Set();
-    const pool = poolFor(score);
-    targets.forEach((t, i) => {
-      let free = pool.filter((id) => !old.has(id) && !chosen.has(id));
-      if (!free.length) free = pool.filter((id) => !chosen.has(id) && id !== t.id);
-      if (!free.length) free = pool;
-      t.id = free[rand(free.length)];
-      chosen.add(t.id);
-      renderSlot(i, "swap");
-    });
-    swapReadyAt = now + SWAP_COOLDOWN;
-    tone(520, 0.08, "triangle", 0.08);
-    noise(0.32, 300, 3200, 0.09);
-    hover = null;
-    if (tut) { if (tut.step === "swap") { tut.step = "break"; tut.t0 = performance.now(); breakReadyAt = 0; } refreshTutorial(); }
-  }
-  $("swapBtn").addEventListener("click", swapAll);
-  $("swapBtn").addEventListener("animationend", () => $("swapBtn").classList.remove("denied"));
 
   let lastTimeText = "";
   function updateTime() {
@@ -896,31 +932,25 @@
     const warn = live && timeLeft <= WARN_AT, urgent = live && timeLeft <= URGENT_AT;
     $("alarm").classList.toggle("on", warn);
     $("alarm").classList.toggle("urgent", urgent);
-    musicBpm = urgent ? 130 : warn ? 100 : 70;
+    musicBpm = urgent ? 152 : warn ? 138 : 124;
   }
 
-  // per-frame meters: combo window and swap cooldown
+  // per-frame meters: combo window and Explode cooldown
   let lastMeters = "";
   function updateMeters(now) {
     const comboLeft = phase === "idle" && combo > 0 ? Math.max(0, comboUntil - now) / COMBO_WINDOW : combo > 0 ? 1 : 0;
     if (phase === "idle" && combo > 0 && now > comboUntil) combo = 0;
-    const cd = Math.min(1, Math.max(0, swapReadyAt - now) / SWAP_COOLDOWN);
     const bcd = Math.min(1, Math.max(0, breakReadyAt - now) / BREAK_COOLDOWN);
-    const key = combo + "|" + comboLeft.toFixed(2) + "|" + cd.toFixed(2) + "|" + bcd.toFixed(2);
+    const key = combo + "|" + comboLeft.toFixed(2) + "|" + bcd.toFixed(2);
     if (key === lastMeters) return;
     lastMeters = key;
     $("comboVal").textContent = "Combo ×" + Math.max(1, combo);
     $("comboChip").classList.toggle("on", combo > 1);
     $("comboFill").style.width = comboLeft * 100 + "%";
-    const btn = $("swapBtn");
-    btn.style.setProperty("--cd", cd.toFixed(3));
-    btn.classList.toggle("ready", cd === 0);
-    btn.classList.toggle("cooling", cd > 0);
-    $("swapVal").textContent = cd === 0 ? "Swap" : Math.ceil(cd * SWAP_COOLDOWN / 1000) + "s";
     const dial = $("breakDial");
     dial.style.setProperty("--cd", bcd.toFixed(3));
     dial.classList.toggle("ready", bcd === 0);
-    $("breakVal").textContent = bcd === 0 ? "Break" : Math.ceil(bcd * BREAK_COOLDOWN / 1000) + "s";
+    $("breakVal").textContent = bcd === 0 ? "Explode" : Math.ceil(bcd * BREAK_COOLDOWN / 1000) + "s";
   }
 
   function updateHud() {
@@ -988,28 +1018,95 @@
 
   // ---------- actions ----------
   function tap(r, c) {
-    const group = groupAt(r, c);
+    let group = groupAt(r, c);
+    // a tapped rainbow tries each neighbouring color for a shape
+    if (grid[r][c].k === WILD) {
+      for (const k of neighborColors(r, c)) {
+        const g = groupAt(r, c, k);
+        if (matchTarget(g) >= 0) { group = g; break; }
+      }
+    }
     const ti = matchTarget(group);
     if (ti < 0) {
       for (const g of group) grid[g.r][g.c].shake = performance.now();
       tone(110, 0.15, "square", 0.04);
-      toast(group.length >= BREAK_MIN ? "Drag the bomb here to break it" : "Not a target shape");
+      toast("Not a target shape");
       return;
     }
     blastShape(group, ti, r, c);
   }
 
   // every exact target shape on the board, keyed by its cells
+  // (rainbow gems can sit in several colors' groups, so only colored gems are marked as seen)
   function exactMatches() {
-    const out = [], seen = new Set();
+    const out = [], seen = new Set(), keys = new Set();
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
-      if (seen.has(r * N + c)) continue;
+      if (grid[r][c].k === WILD || seen.has(r * N + c)) continue;
       const group = groupAt(r, c);
-      for (const g of group) seen.add(g.r * N + g.c);
+      for (const g of group) if (grid[g.r][g.c].k !== WILD) seen.add(g.r * N + g.c);
       const ti = matchTarget(group);
-      if (ti >= 0) out.push({ group, ti, key: group.map((g) => g.r * N + g.c).sort((a, b) => a - b).join(",") });
+      const key = group.map((g) => g.r * N + g.c).sort((a, b) => a - b).join(",");
+      if (ti >= 0 && !keys.has(key)) { keys.add(key); out.push({ group, ti, key }); }
     }
     return out;
+  }
+
+  // Spreads a blast through special gems: a bomb also takes its 8 neighbours (setting off any bomb among them),
+  // an electric gem takes every gem of its color. Returns all cells to pop with their ripple delay, how many the
+  // effects added, and the effects to show.
+  function resolveSpecials(cells) {
+    const map = new Map(), out = [], fx = [];
+    let extra = 0;
+    const add = (r, c, d, byEffect) => {
+      if (r < 0 || c < 0 || r >= N || c >= N) return null;
+      const prev = map.get(r * N + c);
+      if (prev) { if (d < prev.d) prev.d = d; return null; }
+      const cell = { r, c, d };
+      map.set(r * N + c, cell);
+      out.push(cell);
+      if (byEffect) extra++;
+      return cell;
+    };
+    for (const g of cells) add(g.r, g.c, g.d, false);
+    for (let i = 0; i < out.length; i++) {
+      const cell = out[i], gem = grid[cell.r][cell.c];
+      if (gem.sp === "bomb") {
+        fx.push({ type: "bomb", r: cell.r, c: cell.c, d: cell.d });
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) add(cell.r + dr, cell.c + dc, cell.d + 2, true);
+      } else if (gem.sp === "zap") {
+        const hit = [];
+        for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+          if (grid[r][c].k === gem.k && add(r, c, cell.d + 2 + Math.abs(r - cell.r) * 0.3 + Math.abs(c - cell.c) * 0.3, true)) hit.push({ r, c });
+        }
+        fx.push({ type: "zap", r: cell.r, c: cell.c, d: cell.d, hit });
+      }
+    }
+    return { cells: out, extra, fx };
+  }
+
+  // shows each special effect when its gem pops: a bomb flashes, rumbles and booms; a zap throws lightning
+  let zaps = [];
+  function scheduleFx(fx, now, step) {
+    for (const f of fx) {
+      const t = now + f.d * step;
+      const x = (f.c + 0.5) * cs, y = (f.r + 0.5) * cs;
+      if (f.type === "bomb") {
+        rings.push({ x, y, t, color: "#ff9d4d", bloom: true }, { x, y, t: t + 90, color: "#ffd166" });
+        setTimeout(() => {
+          restartAnim(wrap, "rumble");
+          noise(0.5, 1300, 110, 0.26, "lowpass");
+          tone(78, 0.35, "sine", 0.16);
+          try { navigator.vibrate?.(35); } catch (e) {}
+        }, Math.max(0, t - now));
+      } else {
+        zaps.push({ x, y, t, hit: f.hit.map((h) => ({ x: (h.c + 0.5) * cs, y: (h.r + 0.5) * cs })) });
+        setTimeout(() => {
+          noise(0.28, 5200, 900, 0.13, "highpass");
+          tone(1320, 0.08, "sawtooth", 0.05);
+          setTimeout(() => tone(1760, 0.06, "sawtooth", 0.04), 60);
+        }, Math.max(0, t - now));
+      }
+    }
   }
 
   // After a slide settles, a shape the slide created blasts by itself. That includes a shape left behind when
@@ -1025,9 +1122,8 @@
   // Two or more at once ("double") triples the points of that blast.
   const MULTI_BONUS = 3;
   function blastShape(group, ti, r, c) {
-    // tutorial: after the first blast, point at the Swap button next
-    // (the tools are recharged so the next tutorial steps can always be done)
-    if (tut) { tut.step = "swap"; tut.hint = null; swapReadyAt = 0; breakReadyAt = 0; refreshTutorial(); }
+    // tutorial: after the first blast, show the Explode bomb next (recharged so that step can always be done)
+    if (tut) { tut.step = "break"; tut.hint = null; tut.t0 = performance.now(); breakReadyAt = 0; refreshTutorial(); }
     const now = performance.now();
     const key = group.map((g) => g.r * N + g.c).sort((a, b) => a - b).join(",");
     const groups = [group, ...exactMatches().filter((m) => m.key !== key).map((m) => m.group)];
@@ -1036,16 +1132,22 @@
     combo = combo > 0 && now <= comboUntil ? combo + 1 : 1;
     comboUntil = Infinity;
     bestCombo = Math.max(bestCombo, combo);
-    const cells = groups.flat();
+    // groups can share a rainbow gem, so count each cell once
+    const shapeCells = [...new Map(groups.flat().map((g) => [g.r * N + g.c, g])).values()];
+    const res = resolveSpecials(shapeCells);
+    const cells = res.cells;
     let last = 0;
     for (const g of cells) {
       const gem = grid[g.r][g.c];
       gem.popAt = now + g.d * 60;
       last = Math.max(last, gem.popAt);
     }
-    const pts = cells.length * 100 * combo * multi;
+    // shape gems score 100 each (x combo, x3 for a multi blast); every gem a special effect adds scores 100 x combo
+    const pts = shapeCells.length * 100 * combo * multi + res.extra * 100 * combo;
+    scheduleFx(res.fx, now, 60);
     const bonus = timePerShape(score) * groups.length;
     const subs = [multi > 1 ? `×${MULTI_BONUS} POINTS` : "", combo > 1 ? `COMBO ×${combo}` : ""].filter(Boolean);
+    if (res.extra) subs.push(`+${res.extra} BLASTED`);
     flash = { text: multi > 1 ? (groups.length === 2 ? "DOUBLE!" : "TRIPLE!") : PATTERNS[targets[ti].id].label, sub: subs.join("  "), t: now };
     if (multi > 1) { flash.color = ACCENT; toast(`${groups.length} shapes at once: ×${MULTI_BONUS} points`, true); }
     completed += groups.length;
@@ -1082,19 +1184,26 @@
     chord.forEach((m, i) => setTimeout(() => tone(base * m, 0.18, "triangle", 0.09), i * 70));
   }
 
-  // Break: clear any off-pattern clump of BREAK_MIN+ gems. No points, no time, no combo step; recharges for 10 s.
+  // Explode: blow up any group dropped on. Scores 100 per gem it destroys (special effects included), adds no time,
+  // doesn't count as a shape or step the combo; recharges for 10 s.
   function breakGroup(group, r, c) {
     if (tut && tut.step === "break") finishTutorial();
     const now = performance.now();
+    const res = resolveSpecials(group);
     let last = 0;
-    for (const g of group) {
+    for (const g of res.cells) {
       const gem = grid[g.r][g.c];
       gem.popAt = now + g.d * 45;
       last = Math.max(last, gem.popAt);
     }
+    scheduleFx(res.fx, now, 45);
     breakReadyAt = now + BREAK_COOLDOWN;
-    blast = { gems: group, end: last + 220, pts: 0, bonus: 0, r, c, n: 0, isBreak: true };
-    flash = { text: "BREAK", sub: "", t: now, color: ACCENT };
+    const pts = res.cells.length * 100;
+    score += pts;
+    colors = colorsFor(score);
+    blast = { gems: res.cells, end: last + 220, pts, bonus: 0, r, c, n: 0, isBreak: true };
+    flash = { text: "BOOM!", sub: `${res.cells.length} GEMS`, t: now, color: ACCENT };
+    restartAnim($("scoreVal"), "bump");
     tone(150, 0.25, "sawtooth", 0.08);
     noise(0.6, 1400, 90, 0.3, "lowpass");
     tone(70, 0.45, "sine", 0.18);
@@ -1134,7 +1243,7 @@
       });
       const missing = N - keep.length;
       for (let r = 0; r < missing; r++) {
-        const g = newGem(rand(colors));
+        const g = spawnGem();
         g.oy = -missing - 0.4;
         grid[r][c] = g;
       }
@@ -1159,9 +1268,8 @@
     if (phase !== "idle" || overlayOpen || timeLeft <= 0) return;
     const p = pos(e), cell = cellAt(p);
     if (!cell) return;
-    // playing on instead of pressing Swap moves to the Break step; playing on again skips Break and ends the tutorial
+    // playing on during the Explode step skips it and ends the tutorial
     if (tut && tut.step === "break") finishTutorial();
-    else if (tut && tut.step === "swap") { tut.step = "break"; tut.t0 = performance.now(); refreshTutorial(); }
     if (!tut) timerOn = true;
     try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
     drag = { active: true, id: e.pointerId, sx: p.x, sy: p.y, r: cell.r, c: cell.c, axis: null, off: 0 };
@@ -1242,7 +1350,7 @@
   $("replayBtn").addEventListener("click", () => { setRules(false); startTutorial(); });
   $("newGameBtn").addEventListener("click", () => { setRules(false); newGame(); });
 
-  // ---------- Break: drag the bomb from the dock onto a clump of BREAK_MIN+ gems ----------
+  // ---------- Explode: drag the bomb from the dock onto any group ----------
   const dial = $("breakDial");
   let bomb = null; // { id, ghost, t: { cell, group, ok } }
   function bombTarget(x, y) {
@@ -1250,7 +1358,7 @@
     const cell = cellAt({ x: (x - rect.left) * (size / rect.width), y: (y - rect.top) * (size / rect.height) });
     if (!cell) return null;
     const group = groupAt(cell.r, cell.c);
-    return { cell, group, ok: group.length >= BREAK_MIN && matchTarget(group) < 0 };
+    return { cell, group, ok: true };
   }
   function placeGhost(el, x, y) { el.style.left = x + "px"; el.style.top = y + "px"; }
   dial.addEventListener("pointerdown", (e) => {
@@ -1260,7 +1368,7 @@
     if (now < breakReadyAt) {
       restartAnim(dial, "denied");
       tone(110, 0.15, "square", 0.04);
-      toast(`Break ready in ${Math.ceil((breakReadyAt - now) / 1000)} s`);
+      toast(`Explode ready in ${Math.ceil((breakReadyAt - now) / 1000)} s`);
       return;
     }
     e.preventDefault();
@@ -1291,7 +1399,6 @@
       breakGroup(t.group, t.cell.r, t.cell.c);
       return;
     }
-    if (!cancelled && t) { tone(110, 0.15, "square", 0.04); toast("Break needs 5 or more same-color gems"); }
     // fly back to the dock
     const home = dial.getBoundingClientRect();
     ghost.classList.add("back");
@@ -1307,7 +1414,8 @@
     box.className = "target";
     box.appendChild(shapeEl(id));
     const cap = document.createElement("figcaption");
-    cap.textContent = p.label === "LINE" ? "Line" : p.label === "SQUARE" ? "Square" : p.label === "PLUS" ? "Plus" : p.label;
+    const NAMES = { LINE: "Line", SQUARE: "Square", PLUS: "Plus", BLOCK: "Block", "BIG T": "Big T" };
+    cap.textContent = NAMES[p.label] || p.label;
     fig.append(box, cap);
     $("legend").appendChild(fig);
   }
@@ -1316,7 +1424,7 @@
   let tut = null;
   let tutorialDone = false;
   // bumped when the tutorial gains a step, so returning players see the new one once
-  try { tutorialDone = localStorage.getItem("slideBlastTutorial4") === "1"; } catch (e) {}
+  try { tutorialDone = localStorage.getItem("slideBlastTutorial5") === "1"; } catch (e) {}
 
   // the shortest single slide that makes a target shape, or a plain demo slide when none exists
   function bestSlide() {
@@ -1344,11 +1452,6 @@
     [...$("targets").children].forEach((el, j) => el.classList.toggle("hint", j === i));
   }
 
-  function showSwapHand(on) {
-    $("tutHand").toggleAttribute("hidden", !on); // an <svg> has no .hidden property
-    $("swapBtn").classList.toggle("tut-ring", on);
-  }
-
   // Break step: a hand carries a ghost bomb from the dock to a clump, on a loop (positioned every frame in drawTutorial)
   const tutDrag = document.createElement("div");
   tutDrag.className = "tut-drag";
@@ -1366,12 +1469,12 @@
     $("breakDial").classList.toggle("tut-ring", on);
   }
 
-  // The Break step needs a clump of BREAK_MIN+ same-color gems; if the board has none, paint a 2x3 block for the demo.
+  // The Explode step points at a big group (4+); if the board has none, paint a 2x3 block for the demo.
   function tutorialClump() {
     let best = null;
     for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
       const g = groupAt(r, c);
-      if (g.length >= BREAK_MIN && matchTarget(g) < 0 && (!best || g.length > best.length)) best = g;
+      if (grid[r][c].k !== WILD && g.length >= 4 && matchTarget(g) < 0 && (!best || g.length > best.length)) best = g;
     }
     if (best) return best;
     const k = grid[3][3].k;
@@ -1379,19 +1482,15 @@
     return groupAt(3, 3);
   }
 
-  // steps: slide (hand drags a lane) -> tap (hand taps the finished shape) -> swap (hand taps Swap)
-  //        -> break (hand drags the bomb onto a clump)
+  // steps: slide (hand drags a lane) -> tap (hand taps the finished shape) -> break (hand drags the Explode bomb onto a group)
   function refreshTutorial() {
-    if (!tut) { markHintSlot(-1); showSwapHand(false); showBreakHint(false); return; }
-    if (tut.step === "swap") { markHintSlot(-1); showBreakHint(false); showSwapHand(true); return; }
+    if (!tut) { markHintSlot(-1); showBreakHint(false); return; }
     if (tut.step === "break") {
       markHintSlot(-1);
-      showSwapHand(false);
-      if (!tut.hint || tut.hint.length < BREAK_MIN || groupAt(tut.hint[0].r, tut.hint[0].c).length < BREAK_MIN) tut.hint = tutorialClump();
+      if (!tut.hint || tut.hint.length < 4 || groupAt(tut.hint[0].r, tut.hint[0].c).length < 4) tut.hint = tutorialClump();
       showBreakHint(true);
       return;
     }
-    showSwapHand(false);
     showBreakHint(false);
     const g = findMatch();
     if (g) { tut.step = "tap"; tut.hint = g; markHintSlot(matchTarget(g)); }
@@ -1410,7 +1509,7 @@
     tutorialDone = true;
     timerOn = true;
     refreshTutorial();
-    try { localStorage.setItem("slideBlastTutorial4", "1"); } catch (e) {}
+    try { localStorage.setItem("slideBlastTutorial5", "1"); } catch (e) {}
   }
 
   // Fingertip sits at (x, y); press 0..1 squashes it slightly.
@@ -1591,30 +1690,111 @@
   }
 
   // sx/sy squash the gem about its base (landing); glint 0..1 sweeps a band of light across it
-  function drawGem(k, cx, cy, scale, alpha, sx = 1, sy = 1, glint = -1) {
+  function gemOutline(k, R) {
+    if (k === WILD) { ctx.beginPath(); ctx.arc(0, 0, R * 0.88, 0, TAU); } else gemPath(k, R);
+  }
+
+  // effects drawn around (behind) a special gem, in the gem's local space
+  // back = the glow behind the gem; front = embers / lightning drawn over it
+  function drawAura(sp, R, tNow, front) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    if (sp === "bomb" && !front) {
+      const pulse = 0.5 + 0.5 * Math.sin(tNow / 160);
+      const glow = ctx.createRadialGradient(0, 0, R * 0.4, 0, 0, R * (1.4 + 0.2 * pulse));
+      glow.addColorStop(0, `rgba(255,120,40,${0.85 + 0.15 * pulse})`);
+      glow.addColorStop(1, "rgba(255,80,20,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(0, 0, R * 1.6, 0, TAU); ctx.fill();
+    } else if (sp === "zap" && !front) {
+      const flick = 0.55 + 0.45 * Math.abs(Math.sin(tNow / 55));
+      const glow = ctx.createRadialGradient(0, 0, R * 0.4, 0, 0, R * 1.5);
+      glow.addColorStop(0, `rgba(120,200,255,${0.8 * flick})`);
+      glow.addColorStop(1, "rgba(80,160,255,0)");
+      ctx.fillStyle = glow;
+      ctx.beginPath(); ctx.arc(0, 0, R * 1.55, 0, TAU); ctx.fill();
+    } else if (sp === "bomb") {
+      const pulse = 0.5 + 0.5 * Math.sin(tNow / 160);
+      // three embers circling the gem
+      for (let i = 0; i < 3; i++) {
+        const a = tNow / 380 + (i * TAU) / 3;
+        const er = R * (1.02 + 0.08 * Math.sin(tNow / 90 + i));
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * er, Math.sin(a) * er, R * (0.13 + 0.06 * pulse), 0, TAU);
+        ctx.fillStyle = i % 2 ? "rgba(255,210,90,0.95)" : "rgba(255,140,60,0.95)";
+        ctx.fill();
+      }
+    } else if (sp === "zap") {
+      const flick = 0.55 + 0.45 * Math.abs(Math.sin(tNow / 55));
+      // a jagged ring of lightning, redrawn with new kinks every frame
+      ctx.lineWidth = Math.max(1.8, R * 0.11);
+      ctx.strokeStyle = `rgba(210,240,255,${0.65 + 0.35 * flick})`;
+      ctx.beginPath();
+      const pts = 16, off = tNow / 300;
+      for (let i = 0; i <= pts; i++) {
+        const a = off + (i / pts) * TAU;
+        const rr2 = R * (1.05 + (Math.random() - 0.5) * 0.28);
+        ctx[i ? "lineTo" : "moveTo"](Math.cos(a) * rr2, Math.sin(a) * rr2);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawGem(k, cx, cy, scale, alpha, sx = 1, sy = 1, glint = -1, sp = null) {
     const R = cs * 0.4;
-    const g = GEMS[k];
+    const tNow = performance.now();
     ctx.save();
     ctx.translate(cx, cy + R * (1 - sy));
     ctx.scale(scale * sx, scale * sy);
     ctx.globalAlpha = alpha;
     ctx.lineJoin = "round";
-    gemPath(k, R);
-    const grd = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.08, 0, 0, R * 1.15);
-    grd.addColorStop(0, g.light);
-    grd.addColorStop(0.45, g.base);
-    grd.addColorStop(1, g.dark);
-    ctx.fillStyle = grd;
-    ctx.fill();
-    ctx.lineWidth = Math.max(1.5, R * 0.09);
-    ctx.strokeStyle = g.dark;
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.ellipse(-R * 0.28, -R * 0.36, R * 0.26, R * 0.12, -0.6, 0, TAU);
-    ctx.fillStyle = "rgba(255,255,255,0.6)";
-    ctx.fill();
-    if (glint >= 0 && glint <= 1) {
+    if (sp) drawAura(sp, R, tNow, false);
+    if (k === WILD) {
+      // rainbow orb: a slowly turning wheel of every gem color under a glossy shine
+      ctx.save();
+      gemOutline(k, R);
+      ctx.clip();
+      const spin = tNow / 900;
+      for (let i = 0; i < GEMS.length; i++) {
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, R, spin + (i * TAU) / GEMS.length, spin + ((i + 1) * TAU) / GEMS.length);
+        ctx.closePath();
+        ctx.fillStyle = GEMS[i].base;
+        ctx.fill();
+      }
+      const shine = ctx.createRadialGradient(-R * 0.3, -R * 0.35, R * 0.05, 0, 0, R);
+      shine.addColorStop(0, "rgba(255,255,255,0.9)");
+      shine.addColorStop(0.45, "rgba(255,255,255,0.15)");
+      shine.addColorStop(1, "rgba(0,0,0,0.3)");
+      ctx.fillStyle = shine;
+      ctx.fillRect(-R, -R, R * 2, R * 2);
+      ctx.restore();
+      gemOutline(k, R);
+      ctx.lineWidth = Math.max(1.5, R * 0.09);
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+    } else {
+      const g = GEMS[k];
       gemPath(k, R);
+      const grd = ctx.createRadialGradient(-R * 0.35, -R * 0.4, R * 0.08, 0, 0, R * 1.15);
+      grd.addColorStop(0, g.light);
+      grd.addColorStop(0.45, g.base);
+      grd.addColorStop(1, g.dark);
+      ctx.fillStyle = grd;
+      ctx.fill();
+      ctx.lineWidth = Math.max(1.5, R * 0.09);
+      ctx.strokeStyle = g.dark;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(-R * 0.28, -R * 0.36, R * 0.26, R * 0.12, -0.6, 0, TAU);
+      ctx.fillStyle = "rgba(255,255,255,0.6)";
+      ctx.fill();
+    }
+    if (sp) drawAura(sp, R, tNow, true);
+    if (glint >= 0 && glint <= 1) {
+      gemOutline(k, R);
       ctx.clip();
       const gx = -R * 1.6 + glint * R * 3.2;
       const band = ctx.createLinearGradient(gx - R * 0.4, 0, gx + R * 0.4, 0);
@@ -1708,7 +1888,7 @@
       if (dy) { const wy = mod(y, N); ys.push(wy); if (wy > N - 1) ys.push(wy - N); } else ys.push(y);
       for (const px of xs) for (const py of ys) {
         const gx = (px + 0.5) * cs, gy = (py + 0.5) * cs;
-        drawGem(g.k, gx, gy, scale, alpha, sx, sy, glint);
+        drawGem(g.k, gx, gy, scale, alpha, sx, sy, glint, g.sp);
         if (flashA > 0) {
           ctx.globalAlpha = flashA * 0.9;
           ctx.fillStyle = "#ffffff";
@@ -1756,6 +1936,25 @@
       ctx.strokeStyle = g.color;
       ctx.globalAlpha = 0.85 * (1 - p);
       ctx.stroke();
+    }
+    // lightning from an electric gem to every gem of its color
+    for (const z of zaps) {
+      const p = (now - z.t) / 380;
+      if (p < 0 || p > 1) continue;
+      ctx.globalAlpha = 1 - p;
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#cfefff";
+      for (const h of z.hit) {
+        ctx.beginPath();
+        ctx.moveTo(z.x, z.y);
+        const steps = 6;
+        for (let i = 1; i < steps; i++) {
+          const f = i / steps;
+          ctx.lineTo(z.x + (h.x - z.x) * f + (Math.random() - 0.5) * cs * 0.35, z.y + (h.y - z.y) * f + (Math.random() - 0.5) * cs * 0.35);
+        }
+        ctx.lineTo(h.x, h.y);
+        ctx.stroke();
+      }
     }
     ctx.globalCompositeOperation = "source-over";
     ctx.globalAlpha = 1;
@@ -1844,7 +2043,7 @@
         particles.push({
           x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
           r: cs * (0.08 + Math.random() * 0.08),
-          color: i % 2 ? "#6d6178" : GEMS[k].dark,
+          color: i % 2 ? "#6d6178" : (GEMS[k] || GEMS[0]).dark,
           life: 0.7, max: 0.7,
         });
       }
@@ -1855,7 +2054,7 @@
       particles.push({
         x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - cs * 2,
         r: cs * (0.04 + Math.random() * 0.06),
-        color: i % 3 ? GEMS[k].base : GEMS[k].light,
+        color: i % 3 ? (GEMS[k] || GEMS[rand(GEMS.length)]).base : (GEMS[k] || GEMS[rand(GEMS.length)]).light,
         life: 0.55, max: 0.55,
       });
     }
@@ -1912,10 +2111,8 @@
         }
       }
       if (now >= blast.end) {
-        if (!blast.isBreak) {
-          floats.push({ text: `+${blast.pts}`, x: (blast.c + 0.5) * cs, y: (blast.r + 0.5) * cs, t: now, big: combo > 1 ? 1.25 : 1 });
-          flyTime(`+${blast.bonus}s`, (blast.c + 0.5) * cs, (blast.r + 1.2) * cs);
-        }
+        if (blast.pts) floats.push({ text: `+${blast.pts}`, x: (blast.c + 0.5) * cs, y: (blast.r + 0.5) * cs, t: now, big: combo > 1 || blast.pts >= 1500 ? 1.25 : 1 });
+        if (blast.bonus) flyTime(`+${blast.bonus}s`, (blast.c + 0.5) * cs, (blast.r + 1.2) * cs);
         lastWasBreak = !!blast.isBreak;
         blast = null;
         dropAndRefill();
@@ -1967,6 +2164,7 @@
       $("scoreVal").textContent = shownScore.toLocaleString("en-US");
     }
     rings = rings.filter((g) => now - g.t < 650);
+    zaps = zaps.filter((z) => now - z.t < 380);
   }
 
   // juice helpers
@@ -2012,15 +2210,24 @@
 
   // the board is the largest square that fits the space left under the HUD and tray
   const app = document.querySelector(".app");
-  function resize() {
-    dpr = window.devicePixelRatio || 1;
+  function measure() {
     const st = getComputedStyle(app);
     const gap = parseFloat(st.rowGap) || 0;
     const others = [...app.children].filter((el) => el !== wrap && !el.hidden && getComputedStyle(el).position !== "fixed");
     const used = others.reduce((s, el) => s + el.offsetHeight, 0) + gap * others.length;
-    const availH = app.clientHeight - parseFloat(st.paddingTop) - parseFloat(st.paddingBottom) - used;
-    const availW = app.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight);
-    size = Math.max(160, Math.floor(Math.min(availW, availH, 520)));
+    return {
+      h: app.clientHeight - parseFloat(st.paddingTop) - parseFloat(st.paddingBottom) - used,
+      w: app.clientWidth - parseFloat(st.paddingLeft) - parseFloat(st.paddingRight),
+    };
+  }
+  // The board takes the full width; when the screen is too short for that (toolbars, short phones),
+  // the header and dock switch to a tight layout before the board gives up any width.
+  function resize() {
+    dpr = window.devicePixelRatio || 1;
+    app.classList.remove("tight");
+    let fit = measure();
+    if (fit.h < Math.min(fit.w, 540)) { app.classList.add("tight"); fit = measure(); }
+    size = Math.max(160, Math.floor(Math.min(fit.w, fit.h, 540)));
     wrap.style.height = size + "px";
     $("boardBox").style.width = size + "px";
     canvas.width = Math.round(size * dpr);
@@ -2040,8 +2247,9 @@
       targets: () => targets,
       timeLeft: () => timeLeft,
       setTime: (s) => { timeLeft = s; timerOn = true; },
-      state: () => ({ score, combo, comboUntil, completed, colors, swapReadyAt, breakReadyAt, timeLeft }),
-      groupAt, tap, slide, newGame, swapAll, matchTarget, findMatch, canon, PATTERNS,
+      state: () => ({ score, combo, comboUntil, completed, colors, breakReadyAt, timeLeft }),
+      WILD, resolveSpecials, breakGroup,
+      groupAt, tap, slide, newGame, matchTarget, findMatch, canon, PATTERNS,
       // run the game clock synchronously until the board is still again
       settle() {
         let t = performance.now();
